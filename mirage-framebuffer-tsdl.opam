@@ -1,0 +1,28 @@
+opam-version: "1.2"
+maintainer:   "noreply@example.com"
+authors:      ["Joe Hill"]
+homepage:     "https://github.com/mirage/mirage-framebuffer"
+bug-reports:  "https://github.com/mirage/mirage-framebuffer/issues"
+dev-repo:     "https://github.com/mirage/mirage-framebuffer.git"
+license:      "gopher://license.to.chill"
+tags: "org:mirage"
+
+build: [
+  [ "jbuilder" "subst"] {pinned}
+  [ "jbuilder" "build" "-p" name "-j" jobs ]
+]
+
+depends: [
+  "ocamlfind" {build}
+  "jbuilder"  {build & >="1.0+beta9"}
+  "cstruct" { >= "1.9.0" }
+  "lwt"
+  "notty"
+  "fmt"
+  "mirage-types-lwt" { >= "3.0.0" }
+  "logs" { >= "0.5.0" }
+  "mirage-unix"
+  "mirage-framebuffer"
+  "tsdl"
+]
+available: [ocaml-version >= "4.04.0"]
