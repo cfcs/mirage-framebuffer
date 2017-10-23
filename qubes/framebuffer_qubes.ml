@@ -87,11 +87,7 @@ let sub_color_line line offset : (color, [> err]) result =
   else
     Error (`Msg (Fmt.strf "sub_color_line: [%d]: %d" (line_length line) offset))
 
-let lwt_for ?(start=0) stop f =
-  let rec loop = function
-    | i when i = stop -> Lwt.return_unit
-    | i -> f i >>= fun () -> loop (succ i)
-  in loop 0
+open Framebuffer.Utils
 
 let horizontal t ~x ~y ~x_end color =
   lwt_for ~start:(min x 0) (min x_end t.width)

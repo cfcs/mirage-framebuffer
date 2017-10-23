@@ -23,12 +23,19 @@ sig
     -> unit Lwt.t
 end
 
+type uchar = int
+
 module type Framebuffer_S =
 sig
   type init_handle
+  type color
   type t
+
+  val compile_rgb : ?r:char -> ?g:char -> ?b:char -> t -> color
   val redraw : t -> unit Lwt.t
-  val letter : t -> int -> int -> int -> unit Lwt.t
+  val letter : t -> uchar -> x:int -> y:int -> unit Lwt.t
+  val letters : t -> string -> x:int -> y:int -> unit Lwt.t
+  val pixel : t -> x:int -> y:int -> color -> unit Lwt.t
   val term_size : t -> int * int
   val readable : t -> string -> unit Lwt.t
   val init : width:int -> height:int -> init_handle -> t Lwt.t
@@ -36,5 +43,7 @@ end
 
 module type Framebuffer_M = functor (B : Backend_S) ->
 sig
-  include Framebuffer_S with type init_handle = B.init_handle
+  include Framebuffer_S with
+        type init_handle = B.init_handle
+    and type color = B.color
 end

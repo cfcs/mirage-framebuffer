@@ -5,8 +5,19 @@ type uchar = int
 
 module type Backend_S = S.Backend_S
 
+module Utils = struct
+  let lwt_for ?(start=0) stop f =
+    let rec loop = function
+      | i when i = stop -> Lwt.return_unit
+      | i -> f i >>= fun () -> loop (succ i)
+    in loop 0
+
+end
+open Utils
+
 module Make : S.Framebuffer_M = functor (Backend : S.Backend_S) ->
 struct
+  type color = Backend.color
   type init_handle = Backend.init_handle
   type font_table = (uchar, Backend.line array) Hashtbl.t
   type t = {
@@ -19,6 +30,8 @@ struct
 
 module Log : Logs.LOG = (val Logs.src_log (Logs.Src.create "framebuffer"
                                              ~doc:"Mirage.Framebuffer"))
+
+let compile_rgb ?r ?g ?b t = Backend.Compile.rgb ?r ?g ?b t.b
 
 (* load bitmap font *)
 let font_w = 8
@@ -66,7 +79,9 @@ let listiteri lst f =
 
 let redraw t = Backend.redraw t.b
 
-let letter (t:t) codepoint x y =
+let pixel t ~x ~y = Backend.pixel t.b ~x ~y
+
+let letter (t:t) codepoint ~x ~y =
   (* draws a letter occupying pixels x -> x+8 ; y -> y+16*) (*
   assert (0 < x);
   assert (x <= t.width);
@@ -79,7 +94,7 @@ let letter (t:t) codepoint x y =
     Hashtbl.(find t.font codepoint)
     (fun i line -> Backend.draw_line t.b ~x ~y:(y-i) line)
 
-  let letters t str x y =
+  let letters t str ~x ~y =
     stringiteri str
       (fun i -> fun ch ->
          let x2 = (min (t.width -8) (x+(8*i))) in
@@ -129,21 +144,6 @@ let letter (t:t) codepoint x y =
     >>= fun backend ->
     let t : t = {height; width; b = backend ;
                  text_lines = [] ; font = compile_font backend } in
-    let open Backend.Compile in
-    Backend.rect t.b (rgb ~r:'\xe0' backend)
-        ~x:0 ~x_end:width
-        ~y:(height/3*2) ~y_end:height >>= fun () ->
-
-    letters t "== OCaml ==" 10 (height/3*2) >>= fun () ->
-
-    Backend.rect t.b (rgb ~g:'\xff' ~b:'\xff' backend)
-        ~x:0 ~x_end:width
-        ~y:(height/3) ~y_end:(height/3*2) >>= fun () ->
-    letters t "with MirageOS kung-fu" 10 (height/3) >>= fun () ->
-    Backend.rect t.b (rgb ~b:'\xe0' backend) ~x:0 ~x_end:width
-        ~y:0 ~y_end: (height/3) >>= fun () ->
-    letters t "Brings C to its knees" 10 20 >>= fun () ->
-    letter t 0x62 50 50 >>= fun () ->
-    redraw t >>= fun () -> Lwt.return t
+    Lwt.return t
 
 end
