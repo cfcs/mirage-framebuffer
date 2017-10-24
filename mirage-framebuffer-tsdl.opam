@@ -17,12 +17,12 @@ depends: [
   "jbuilder"  {build & >="1.0+beta9"}
   "cstruct" { >= "1.9.0" }
   "lwt"
-  "notty"
   "fmt"
   "mirage-types-lwt" { >= "3.0.0" }
   "logs" { >= "0.5.0" }
-  "mirage-unix"
+  "mirage-unix" {>="3.0.0"}
   "mirage-framebuffer"
-  "tsdl"
+  "rresult" {>= "0.5.0"}
+  "tsdl" {>= "0.9.5"}
 ]
 available: [ocaml-version >= "4.04.0"]
