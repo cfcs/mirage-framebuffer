@@ -1,0 +1,8 @@
+(executables
+ ((names (test_tsdl))
+  (libraries (mirage-framebuffer-tsdl mirage-framebuffer))
+))
+(alias
+ ((name    runtest)
+  (deps   (test_tsdl.exe))
+  (action (run ${<}))))

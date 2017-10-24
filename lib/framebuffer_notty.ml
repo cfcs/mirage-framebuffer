@@ -52,8 +52,7 @@ module Make(FB:S.Framebuffer_S) = struct
 
   let set_size t dim = Tmachine.set_size t.trm dim
 
-  let create ?(dispose=true) ?(nosig=true) ?(mouse=true)
-             ?(input=`Stdin) fb =
+  let create ?(mouse=true) fb =
     let t = { trm = Tmachine.create ~mouse Notty.Cap.dumb;
               fb
     } in
@@ -71,12 +70,15 @@ module Make(FB:S.Framebuffer_S) = struct
   let size t = Tmachine.size t.trm
 
   let release t =
+    let _ = t in
     (*if Tmachine.release t.trm then
       ( t.trm.stop (); write t)
     else *) Lwt.return_unit
 
 
-  let event t : [Unescape.event | `Resize of (int*int) | `End] = `End
-  let pending t : bool = true
-  let output_image ~(cap:Notty.Cap.t) ?clear ?chan image = ()
+  let event t : [Unescape.event | `Resize of (int*int) | `End] = let _ = t in `End
+  let pending t : bool = let _ = t in true
+  let output_image ~(cap:Notty.Cap.t) ?clear ?chan image =
+          let _ = clear , chan , cap , image in
+          ()
 end

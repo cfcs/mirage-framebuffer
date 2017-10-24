@@ -32,7 +32,7 @@ open Rresult
 let log fmt = Format.printf (fmt ^^ "@.")
 let log_err fmt = Format.eprintf (fmt ^^ "@.")
 
-let sdl_ALPHA_OPAQUE = 0xff
+let sdl_ALPHA_OPAQUE = 0xff_l
 
 let event_loop backend : unit =
   let e = Sdl.Event.create () in
@@ -58,7 +58,8 @@ type backend = {
 
 let redraw (b:backend) = Sdl.render_present b.renderer ; Lwt.return_unit
 
-let init ~width ~height (xyz:init_handle) =
+let init ~width ~height (():init_handle) =
+  let _ = event_loop (*TODO*) in
   let w, h = width, height in
   let _ = Sdl.init Sdl.Init.(timer + video + events) in
   let window, renderer = Sdl.create_window_and_renderer ~w ~h
@@ -72,33 +73,32 @@ type line = { w : int; (*width, in pixels *)
               texture: Sdl.texture} (*(int32, Bigarray.int32_elt) bigarray*)
 type color = int32 (*Sdl.color*)
 
-let my_pixel_format_enum = Sdl.Pixel.format_rgb888
+(*let my_pixel_format_enum = Sdl.Pixel.format_rgb888*)
 (* consider (get_current_display_mode |> R.get_ok).dm_format
    OR Sdl.get_surface_format_enum *)
 
-let pixel_format = Sdl.alloc_format my_pixel_format_enum |> R.get_ok
+(*let pixel_format = Sdl.alloc_format my_pixel_format_enum |> R.get_ok*)
 
 let set_title (b:backend) title = Sdl.set_window_title b.window title
 
 module Compile =
 struct
-  let rgb ?(r='\x00') ?(g='\x00') ?(b='\x00') (backend:backend) =
+  let rgb ?(r='\x00') ?(g='\x00') ?(b='\x00') (_:backend) =
     (*Sdl.Color.create ~r:(Char.code r) ~g:(Char.code g) ~b:(Char.code b)
       ~a:sdl_ALPHA_OPAQUE*)
     let open Int32 in
        add (shift_left (of_int @@ int_of_char r) 24)
            (shift_left (of_int @@ int_of_char g) 16)
     |> add (shift_left (of_int @@ int_of_char b) 8)
-    |> add 0x80l
+    |> add sdl_ALPHA_OPAQUE
 
   let line (lst:color list) b : line =
     let w = List.length lst and depth = 32 in
     let rmask = 0xff_00_00_00_l
     and gmask = 0xff_00_00_l
-    and bmask = 0xff_00l
-    and alpha_mask = 0xff_l in
+    and bmask = 0xff_00l in
     let open Tsdl.Sdl in
-    let surface : surface = Sdl.create_rgb_surface ~w ~h:1 ~depth rmask gmask bmask alpha_mask |> R.get_ok in
+    let surface : surface = Sdl.create_rgb_surface ~w ~h:1 ~depth rmask gmask bmask sdl_ALPHA_OPAQUE |> R.get_ok in
     assert(Sdl.lock_surface surface = Ok ());
     let ba = Sdl.get_surface_pixels surface Bigarray.int32 in
     List.iteri (fun i (p:int32) -> Bigarray.Array1.set ba i p) lst;
@@ -110,6 +110,7 @@ struct
 end
 
 let draw_line (b:backend) ~(x:int) ~(y:int) ({w;texture}:line) =
+  log "drawing line x:%d y:%d w:%d" x y w;
   ignore @@ Sdl.render_copy ~dst:(Sdl.Rect.create ~x ~y ~w ~h:1) b.renderer texture ;
   (*Sdl.render_fill_rects_ba b.renderer l ;*)
   redraw b
@@ -120,7 +121,7 @@ let horizontal (b:backend) ~(x:int) ~(y:int) ~(x_end:int) (c:color) =
 open Framebuffer.Utils
 
 let rect (b:backend) ~(x:int) ~(y:int) ~(x_end:int) ~(y_end:int) (c:color) =
-  lwt_for ~start:(min y 0) y
+  lwt_for ~start:(max y 0) y_end
     (fun y -> horizontal b ~x ~y ~x_end c)
   (* https://github.com/dbuenzli/tsdl/blob/master/test/test.ml#L122 *)
 

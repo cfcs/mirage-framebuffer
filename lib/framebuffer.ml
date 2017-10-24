@@ -10,10 +10,8 @@ module Utils = struct
     let rec loop = function
       | i when i = stop -> Lwt.return_unit
       | i -> f i >>= fun () -> loop (succ i)
-    in loop 0
-
+    in loop start
 end
-open Utils
 
 module Make : S.Framebuffer_M = functor (Backend : S.Backend_S) ->
 struct
@@ -100,8 +98,8 @@ let letter (t:t) codepoint ~x ~y =
          let x2 = (min (t.width -8) (x+(8*i))) in
          let y2 = (min y (t.height - 16)) in
    (*Log.warn (fun m -> m "i: %d x: (%d) %d y: (%d) %d c: %C" i x2 x y2 y ch);*)
-      letter t (int_of_char ch) x2
-                                y2
+      letter t (int_of_char ch) ~x:x2
+                                ~y:y2
     )
 
   let term_size t = (t.width / 8) , (t.height /16)
@@ -131,7 +129,7 @@ let letter (t:t) codepoint ~x ~y =
            else s) in
     let() = Log.info (fun m -> m "Strs: %a" Fmt.(list ~sep:(unit "~")string) lines) in
     let() = t.text_lines <- lines in
-    listiteri t.text_lines (fun y line -> letters t line 0 (y*16))
+    listiteri t.text_lines (fun y line -> letters t line ~x:0 ~y:(y*16))
       >>= fun () -> redraw t
 
   let internal_resize t ~width ~height =
@@ -140,6 +138,7 @@ let letter (t:t) codepoint ~x ~y =
     Lwt.return_unit
 
   let init ~width ~height init_t : t Lwt.t =
+    let _ = internal_resize (* TODO *) in
     Backend.init ~height:height ~width:width init_t
     >>= fun backend ->
     let t : t = {height; width; b = backend ;
