@@ -35,7 +35,7 @@ let resolve_ret (thread : 'a S.or_eof Lwt.t) : 'a Lwt.t =
 let set_title t title = GUI.set_title t.window title
 
 let pixel (t:backend) ~x ~y (color:color) =
-  let y_offset = t.width * (t.height-y) * 4 in
+  let y_offset = t.width * y * 4 in
   assert (color_w = String.length color) ;
   Io_page.string_blit
     color 0
@@ -46,10 +46,10 @@ let pixel (t:backend) ~x ~y (color:color) =
 module Compile = struct
   let rgb ?(r='\x00') ?(g='\x00') ?(b='\x00') _ : color =
     let s = Bytes.create 4 in
-    Bytes.unsafe_set s 0 r ;
-    Bytes.unsafe_set s 1 g ;
-    Bytes.unsafe_set s 2 b ;
     Bytes.unsafe_set s 3 '\x7f' ; (* ignored by Qubes *)
+    Bytes.unsafe_set s 2 r ;
+    Bytes.unsafe_set s 1 g ;
+    Bytes.unsafe_set s 0 b ;
     Bytes.to_string s
 
   let lineiter (f: int -> color) len _ : line =
@@ -97,9 +97,13 @@ let draw_line t ~x ~y line : unit Lwt.t =
   let len = line_length line in
   lwt_for len
     (fun l_off ->
-      match sub_color_line line (len - l_off -1) with (* TODO *)
+      match sub_color_line line l_off with (* TODO *)
       | Ok color -> pixel t ~x:(x+l_off) ~y color
       | Error _ -> failwith "TODO handle / implement")
+
+let rect_lineiter t ~x ~y ~y_end f : unit Lwt.t =
+  lwt_for (y_end-y)
+    (fun off -> draw_line t ~x ~y:(y+off) (f off))
 
 let rect t ~x ~y ~x_end ~y_end color =
   lwt_for ~start:(min 0 y) (min t.height y_end)

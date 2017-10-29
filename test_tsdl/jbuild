@@ -1,6 +1,6 @@
 (executables
  ((names (test_tsdl))
-  (libraries (mirage-framebuffer-tsdl mirage-framebuffer))
+  (libraries (mirage-framebuffer-tsdl mirage-framebuffer mirage-framebuffer-imagelib logs.fmt imagelib))
 ))
 (alias
  ((name    runtest)

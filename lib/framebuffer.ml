@@ -4,6 +4,7 @@ type uchar = int
 (* let screenshot t = TODO *)
 
 module type Backend_S = S.Backend_S
+module type S = S.Framebuffer_S
 
 module Utils = struct
   let lwt_for ?(start=0) stop f =
@@ -16,6 +17,7 @@ end
 module Make : S.Framebuffer_M = functor (Backend : S.Backend_S) ->
 struct
   type color = Backend.color
+  type line = Backend.line
   type init_handle = Backend.init_handle
   type font_table = (uchar, Backend.line array) Hashtbl.t
   type t = {
@@ -30,6 +32,7 @@ module Log : Logs.LOG = (val Logs.src_log (Logs.Src.create "framebuffer"
                                              ~doc:"Mirage.Framebuffer"))
 
 let compile_rgb ?r ?g ?b t = Backend.Compile.rgb ?r ?g ?b t.b
+let compile_line colors t = Backend.Compile.line colors t.b
 
 (* load bitmap font *)
 let font_w = 8
@@ -45,7 +48,7 @@ let compile_font backend : font_table =
       | Some s -> s | _ -> failwith "unable to load bitmap content" in
     let pixels_of_byte byte =
       backend |> (font_w |> Backend.Compile.lineiter
-        (fun i -> if byte land (1 lsl i) > 0 then color else blank))
+        (fun i -> if byte land (1 lsl (font_w-i-1)) > 0 then color else blank))
     in
     for chari = 0 to (String.(length str)-1) / codepoint_w do
       let t = Cstruct.create codepoint_w in
@@ -65,7 +68,7 @@ let t_iteri t t_len t_get f =
   | i -> f i (t_get i) >>= fun () -> loop (succ i)
   in loop 0
 
-let arrayiteri arr f = t_iteri arr Array.length (Array.get arr) f
+(*let arrayiteri arr f = t_iteri arr Array.length (Array.get arr) f*)
 
 let stringiteri str f = t_iteri str String.length (String.get str) f
 
@@ -79,6 +82,9 @@ let redraw t = Backend.redraw t.b
 
 let pixel t ~x ~y = Backend.pixel t.b ~x ~y
 
+let rect t ~x ~y ~x_end ~y_end color = Backend.rect t.b ~x ~y ~x_end ~y_end color
+let rect_lineiter t ~x ~y ~y_end f = Backend.rect_lineiter t.b ~x ~y ~y_end f
+
 let letter (t:t) codepoint ~x ~y =
   (* draws a letter occupying pixels x -> x+8 ; y -> y+16*) (*
   assert (0 < x);
@@ -86,13 +92,11 @@ let letter (t:t) codepoint ~x ~y =
   assert (0 <= y);
   assert (x <= t.height);*)
 
-  (* adjust y since we draw from top->down *)
-  let y = y + 16 in
-  arrayiteri
-    Hashtbl.(find t.font codepoint)
-    (fun i line -> Backend.draw_line t.b ~x ~y:(y-i) line)
+  let letter = Hashtbl.(find t.font codepoint) in
+  let y_end = min t.height (y+font_h) in
+  rect_lineiter t ~x ~y ~y_end (fun i -> letter.(i))
 
-  let letters t str ~x ~y =
+let letters t str ~x ~y =
     stringiteri str
       (fun i -> fun ch ->
          let x2 = (min (t.width -8) (x+(8*i))) in

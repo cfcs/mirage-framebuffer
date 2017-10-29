@@ -63,7 +63,7 @@ let init ~width ~height (():init_handle) =
   let w, h = width, height in
   let _ = Sdl.init Sdl.Init.(timer + video + events) in
   let window, renderer = Sdl.create_window_and_renderer ~w ~h
-      Sdl.Window.(windowed + opengl + resizable) |> R.get_ok in
+      Sdl.Window.(windowed + resizable) |> R.get_ok in
   (*event_loop () ;*)
   (* Sdl.destroy_window w ; Sdl.quit () *)
   Lwt.return {window ; renderer}
@@ -114,6 +114,11 @@ let draw_line (b:backend) ~(x:int) ~(y:int) ({w;texture}:line) =
   ignore @@ Sdl.render_copy ~dst:(Sdl.Rect.create ~x ~y ~w ~h:1) b.renderer texture ;
   (*Sdl.render_fill_rects_ba b.renderer l ;*)
   redraw b
+
+let rect_lineiter (b:backend) ~x ~y ~y_end f =
+  let open Framebuffer.Utils in
+  lwt_for (y_end - y)
+    (fun off -> draw_line b ~x ~y:(y+off) (f off))
 
 let horizontal (b:backend) ~(x:int) ~(y:int) ~(x_end:int) (c:color) =
   draw_line b ~x ~y (Compile.lineiter (fun _ -> c) (max (x_end-x) 0) b)
