@@ -30,7 +30,7 @@ open Rresult
  *)
 
 let log fmt = Format.printf (fmt ^^ "@.")
-let log_err fmt = Format.eprintf (fmt ^^ "@.")
+let log_err fmt = let _ = log in Format.eprintf (fmt ^^ "@.")
 
 let sdl_ALPHA_OPAQUE = 0xff_l
 
@@ -110,10 +110,10 @@ struct
 end
 
 let draw_line (b:backend) ~(x:int) ~(y:int) ({w;texture}:line) =
-  log "drawing line x:%d y:%d w:%d" x y w;
+  (*log "drawing line x:%d y:%d w:%d" x y w;*)
   ignore @@ Sdl.render_copy ~dst:(Sdl.Rect.create ~x ~y ~w ~h:1) b.renderer texture ;
+  Lwt.return_unit
   (*Sdl.render_fill_rects_ba b.renderer l ;*)
-  redraw b
 
 let rect_lineiter (b:backend) ~x ~y ~y_end f =
   let open Framebuffer.Utils in
