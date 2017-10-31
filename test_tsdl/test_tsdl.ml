@@ -1,8 +1,8 @@
 open Lwt.Infix
 
-module Make(FB:Framebuffer__S.Framebuffer_S) = struct
+module Make(FB:Framebuffer.S) = struct
   let rainbow fb () =
-    let img = ImageLib.openfile "../../../test_tsdl/rainbow.png" in
+    let img = ImageLib.openfile "test_tsdl/rainbow.png" in
     let module IMG = Framebuffer_image.Make(FB) in
     IMG.draw_image fb img
 
@@ -26,11 +26,13 @@ end
 let () =
   Logs.set_reporter @@ Logs_fmt.reporter ~dst:Format.std_formatter () ;
   Logs.(set_level @@ Some Debug);
-  let module FB : module type of Framebuffer.Make(Framebuffer_tsdl)
-                = Framebuffer.Make(Framebuffer_tsdl) in
+  let module A =  Framebuffer.Make(Framebuffer_tsdl) in
+  let b = A.init() in
+  let module FB : Framebuffer.S = (val (b)) in
+
   let module T = Make(FB) in
   Lwt_main.run (
-  FB.init ~width:100 ~height:100 () >>= fun fb ->
+  FB.window ~width:100 ~height:100 >>= fun fb ->
   T.rainbow fb () >>=
   T.draw_pixels fb >>=
   T.draw_a_letter fb >>=

@@ -16,9 +16,12 @@ end
 
 module Make : S.Framebuffer_M = functor (Backend : S.Backend_S) ->
 struct
+  let init init_t =
+    let module Frontend : S.Framebuffer_S with
+      type color = Backend.color and type line = Backend.line
+    = struct
   type color = Backend.color
   type line = Backend.line
-  type init_handle = Backend.init_handle
   type font_table = (uchar, Backend.line array) Hashtbl.t
   type t = {
     mutable height : int ;
@@ -141,7 +144,7 @@ let letters t str ~x ~y =
     t.height <- height ;
     Lwt.return_unit
 
-  let init ~width ~height init_t : t Lwt.t =
+  let window ~width ~height : t Lwt.t =
     let _ = internal_resize (* TODO *) in
     Backend.init ~height:height ~width:width init_t
     >>= fun backend ->
@@ -149,4 +152,6 @@ let letters t str ~x ~y =
                  text_lines = [] ; font = compile_font backend } in
     Lwt.return t
 
+end in
+    (module Frontend : S)
 end
