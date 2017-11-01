@@ -124,7 +124,22 @@ let mfndump t =
   |> List.filter (function None -> false | _ -> true)
   |> List.map (function Some x -> x | None -> failwith "TODO implement")
 
-let init ~width ~height qubes_t : backend Lwt.t =
+let rec recv_event (t:backend) : Framebuffer__S.backend_event Lwt.t =
+  let open Framebuffer__S in
+  GUI.recv_event t.window >>= function
+  | Button _ -> Lwt.return Mouse_button
+  | Keypress _ -> Lwt.return (Keypress : Framebuffer__S.backend_event)
+  | Focus _ -> Lwt.return Window_focus
+  | Motion _ -> Lwt.return Mouse_motion
+  | Clipboard_data (cstruct:Cstruct.t) ->
+    Lwt.return (Clipboard_paste (Cstruct.to_string cstruct))
+  | Clipboard_request -> Lwt.return Clipboard_request
+  | Window_crossing _ -> recv_event t
+  | Window_destroy -> Lwt.return Window_close (* TODO actually means "it disappeared" *)
+  | Window_close -> Lwt.return Window_close
+  | UNIT () -> recv_event t (* TODO ignore*)
+
+let window qubes_t ~width ~height : backend Lwt.t =
   (* 32 bits per pixel, rounded up: *)
   let page_count = ((height * width * (32/8)) |> Io_page.round_to_page_size)
                    / Io_page.page_size in
@@ -139,7 +154,8 @@ let init ~width ~height qubes_t : backend Lwt.t =
      Log.info (fun f -> f "Set up %d shared pages with dom0" page_count);
      (*TODO assert (page_count = Io_page.length mapping / 4096);*)
      (let width = Int32.of_int width and height = Int32.of_int height in
-     (resolve_ret @@ Qubes.GUI.create_window ~width ~height qubes_t)) >>= fun window ->
+       (resolve_ret @@ Qubes.GUI.create_window ~width ~height qubes_t)
+     ) >>= fun window ->
      let t =
        { height; width;
          io_page = mapping ;
@@ -150,13 +166,11 @@ let init ~width ~height qubes_t : backend Lwt.t =
          window;
       }
      in
-     Lwt.async (GUI.debug_window window) ;
-     rect t Compile.(rgb ~r:'\x50' ~g:'\x50' ~b:'\x50'())
-       ~x:0 ~x_end:t.width ~y:0 ~y_end:height
-     >>= fun () ->
      Lwt.return t
   end
   )
+
+let init_backend _qubes_t = Lwt.return_unit
 
 let redraw t =
     let mfns = mfndump t in

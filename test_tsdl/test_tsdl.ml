@@ -1,6 +1,13 @@
 open Lwt.Infix
 
 module Make(FB:Framebuffer.S) = struct
+  let pp_events fb () =
+    let rec loop () =
+      FB.recv_event fb >>= fun ev ->
+      Logs.app (fun m -> m "%a" Framebuffer.pp_backend_event ev) ;
+      loop ()
+    in loop ()
+
   let rainbow fb () =
     let img = ImageLib.openfile "test_tsdl/rainbow.png" in
     let module IMG = Framebuffer_image.Make(FB) in
@@ -19,21 +26,27 @@ module Make(FB:Framebuffer.S) = struct
 
   let draw_letters fb () =
     FB.letters fb ~x:50 ~y: 50 "hello" >>= fun() -> FB.redraw fb
-  let sleep () =
-    Lwt_unix.sleep 10.0
+  let rec finish fb () =
+    FB.recv_event fb >>= function
+            | Window_close -> Lwt.return_unit
+            | _ -> Lwt_unix.sleep 0.001 >>= finish fb
 end
+
+let main = 
+  let module A =  Framebuffer.Make(Framebuffer_tsdl) in
+  A.init() >>= fun backend ->
+  let module FB : Framebuffer.S = (val (backend)) in
+
+  let module T = Make(FB) in
+  FB.window ~width:100 ~height:100 >>= fun fb ->
+  Lwt.async (T.pp_events fb);
+  T.rainbow fb () >>=
+  T.draw_pixels fb >>=
+  T.draw_a_letter fb >>=
+  T.draw_letters fb >>= fun () ->
+  T.finish fb ()
 
 let () =
   Logs.set_reporter @@ Logs_fmt.reporter ~dst:Format.std_formatter () ;
   Logs.(set_level @@ Some Debug);
-  let module A =  Framebuffer.Make(Framebuffer_tsdl) in
-  let b = A.init() in
-  let module FB : Framebuffer.S = (val (b)) in
-
-  let module T = Make(FB) in
-  Lwt_main.run (
-  FB.window ~width:100 ~height:100 >>= fun fb ->
-  T.rainbow fb () >>=
-  T.draw_pixels fb >>=
-  T.draw_a_letter fb >>=
-  T.draw_letters fb >>= T.sleep)
+  Lwt_main.run main

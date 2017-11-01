@@ -10,7 +10,7 @@ open Rresult
    http://friedspace.com/cprogramming/sdlpixels.php *)
 
 (*
- val Lwt_io.make : 
+ val Lwt_io.make :
   ?buffer:Lwt_bytes.t ->
   ?close:(unit -> unit Lwt.t) ->
   ?seek:(int64 -> Unix.seek_command -> int64 Lwt.t) ->
@@ -28,45 +28,96 @@ open Rresult
       assert (ba.{0} = 0xFF0000FFl);
       Sdl.unlock_surface s0;
  *)
+type window_id = int
+type backend =
+  { no: window_id;
+    event_mvar: Framebuffer__S.backend_event Lwt_mvar.t ;
+    window : Sdl.window ;
+    renderer : Sdl.renderer ;
+  }
+type global_state_t =
+  { mutable windows : (window_id * backend) list ; }
 
-let log fmt = Format.printf (fmt ^^ "@.")
-let log_err fmt = let _ = log in Format.eprintf (fmt ^^ "@.")
+let global_state : global_state_t = { windows = [] ; }
+let no_window = 0 (* 0 is returned for errors on calls to SDL_GetWindowID(win),
+                     see https://wiki.libsdl.org/SDL_GetWindowID*)
 
 let sdl_ALPHA_OPAQUE = 0xff_l
 
-let event_loop backend : unit =
-  let e = Sdl.Event.create () in
-  let rec loop () = match Sdl.wait_event (Some e) with
-  | Error (`Msg e) -> log_err " Could not wait event: %s" e; ()
-  | Ok () ->
-      match Sdl.Event.(enum (get e typ)) with
-      | `Quit -> backend
-      | `Drop_file -> Sdl.Event.drop_file_free e; loop ()
-      | _ -> loop ()
+let event_loop () : unit Lwt.t =
+  let open Framebuffer__S in
+  let ev = Sdl.Event.create () in
+  let get_field = Sdl.Event.get ev in
+  (*Sdl.Event.(get ev keyboard_window_id), mouse_button_window_id, etc*)
+  let parse_event () : (unit Lwt.t, [`Msg of string]) result=
+    let open Sdl.Event in
+    match Sdl.poll_event (Some ev) with
+    | false -> Error (`Msg "Sdl.poll_event")
+    | true ->
+      let ev_type = Sdl.Event.(get ev typ) in
+      Logs.debug (fun m -> m "got an event");
+      begin match Sdl.Event.enum ev_type with
+        | `Clipboard_update ->
+          begin match Sdl.get_clipboard_text () with
+            | Error (`Msg err) ->
+              Logs.err (fun m -> m "Sdl.get_clipboard_text: %s" err);
+              Error (`Msg err)
+            | Ok str -> Ok (0, Clipboard_paste str)
+          end
+        | `Drop_file ->
+          Sdl.Event.drop_file_free ev ;
+          Error (`Msg "Sdl.Event.`Drop_file")
+        | `Key_up | `Key_down -> Ok (get_field keyboard_window_id, Keypress)
+        | `Mouse_button_down ->
+          Ok (get_field mouse_button_window_id, Mouse_button)
+        | `Window_event -> Error (`Msg "Event.(get ev window_event_focus) etc")
+        | `Quit -> Ok (0, Window_close) (*TODO *)
+        | _ -> Error (`Msg "unhandled event")
+      end >>= fun (window_id, parsed_ev) ->
+      begin match List.assoc window_id global_state.windows with
+        | exception Not_found ->
+          Error (`Msg "TODO ignore global events?")
+        | window ->
+          Ok (Lwt_mvar.put window.event_mvar parsed_ev)
+      end
   in
-  Sdl.start_text_input ();
+  let rec loop () =
+    let open Lwt.Infix in
+    begin match parse_event () with
+    | Error (`Msg _) -> Lwt.return_unit
+    | Ok promise -> promise
+    end >>= fun () ->
+    Lwt_unix.sleep 0.01 >>= loop (* tick every 1/100 second*)
+  in
   loop ()
-
-type init_handle = unit
-
-type backend = {
-    window : Sdl.window ;
-    renderer : Sdl.renderer
-  }
+  (*Sdl.start_text_input ();*)
 
 (* TODO use Sdl.lock_surface / Sdl.lock_texture *)
 
 let redraw (b:backend) = Sdl.render_present b.renderer ; Lwt.return_unit
 
-let init ~width ~height (():init_handle) =
-  let _ = event_loop (*TODO*) in
+let recv_event (b:backend) : Framebuffer__S.backend_event Lwt.t =
+  Lwt_mvar.take b.event_mvar
+
+type init_handle = unit
+
+let window (() :init_handle) ~width ~height =
   let w, h = width, height in
-  let _ = Sdl.init Sdl.Init.(timer + video + events) in
   let window, renderer = Sdl.create_window_and_renderer ~w ~h
       Sdl.Window.(windowed + resizable) |> R.get_ok in
+  let backend = {window ; renderer; no = Sdl.get_window_id window;
+                 event_mvar = Lwt_mvar.create_empty () }
+  in
+  assert (backend.no <> no_window);
+  global_state.windows <- (backend.no, backend) :: global_state.windows ;
   (*event_loop () ;*)
   (* Sdl.destroy_window w ; Sdl.quit () *)
-  Lwt.return {window ; renderer}
+  Lwt.return backend
+
+let init_backend ((): init_handle) =
+  let _ = Sdl.init Sdl.Init.(timer + video + events) in
+  Lwt.async event_loop ;
+  Lwt.return_unit
 
 type 'a ret = 'a
 type line = { w : int; (*width, in pixels *)
@@ -98,12 +149,16 @@ struct
     and gmask = 0xff_00_00_l
     and bmask = 0xff_00l in
     let open Tsdl.Sdl in
-    let surface : surface = Sdl.create_rgb_surface ~w ~h:1 ~depth rmask gmask bmask sdl_ALPHA_OPAQUE |> R.get_ok in
+    let surface : surface =
+      Sdl.create_rgb_surface ~w ~h:1 ~depth
+        rmask gmask bmask sdl_ALPHA_OPAQUE
+      |> R.get_ok in
     assert(Sdl.lock_surface surface = Ok ());
     let ba = Sdl.get_surface_pixels surface Bigarray.int32 in
     List.iteri (fun i (p:int32) -> Bigarray.Array1.set ba i p) lst;
     Sdl.unlock_surface surface ;
-    let texture = Sdl.create_texture_from_surface b.renderer surface |> R.get_ok in
+    let texture =
+      Sdl.create_texture_from_surface b.renderer surface |> R.get_ok in
     let()=Sdl.free_surface surface in {w ; texture}
 
   let lineiter f i b = line (Array.init i f |> Array.to_list) b
@@ -137,4 +192,3 @@ let pixel (b:backend) ~(x:int) ~(y:int) (c:color) : unit Lwt.t=
      Sdl.render_draw_point b.renderer x y |> R.get_ok ;
      redraw b
    * *)
-

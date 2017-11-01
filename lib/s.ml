@@ -1,3 +1,14 @@
+type backend_event =
+  | Clipboard_paste of string (** When the user pastes [string] in the window*)
+  | Clipboard_request (** When the backend requests our window's clipboard *)
+  | Keypress (** When a keyboard key is pressed or released *)
+  | Mouse_button (** When a mouse button is pressed or released *)
+  | Mouse_motion (** When the mouse is moved (not necessarily within window)*)
+  | Window_close
+  | Window_focus
+  (* | Window_focus *)
+  | Resize of int * int
+
 module type Backend_S =
 sig
   type backend
@@ -13,7 +24,9 @@ sig
     val lineiter : (int -> color) -> int -> backend ->line
   end
 
-  val init : width:int -> height:int -> init_handle -> backend Lwt.t
+  val init_backend : init_handle -> unit Lwt.t
+  val window : init_handle -> width:int -> height:int -> backend Lwt.t
+  val recv_event : backend -> backend_event Lwt.t
   val redraw : backend -> unit Lwt.t
   val set_title : backend -> string -> unit ret
   val pixel : backend -> x:int -> y:int -> color -> unit Lwt.t
@@ -47,9 +60,10 @@ sig
   val term_size : t -> int * int
   val readable : t -> string -> unit Lwt.t
   val window : width:int -> height:int -> t Lwt.t
+  val recv_event : t -> backend_event Lwt.t
 end
 
 module type Framebuffer_M = functor (B : Backend_S) ->
 sig
-  val init : B.init_handle -> (module Framebuffer_S)
+  val init : B.init_handle -> (module Framebuffer_S) Lwt.t
 end

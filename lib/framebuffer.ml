@@ -14,9 +14,20 @@ module Utils = struct
     in loop start
 end
 
+let pp_backend_event (fmt:Format.formatter) : S.backend_event -> unit = function
+  | Clipboard_paste str -> Fmt.pf fmt "Clipboard_paste: %S" str
+  | Clipboard_request -> Fmt.pf fmt "Clipboard_request"
+  | Keypress -> Fmt.pf fmt "Keypress"
+  | Mouse_button -> Fmt.pf fmt "Mouse_button"
+  | Mouse_motion -> Fmt.pf fmt "Mouse_motion"
+  | Window_close -> Fmt.pf fmt "Window_close"
+  | Window_focus -> Fmt.pf fmt "Window_focus"
+  | Resize (w,h) -> Fmt.pf fmt "Resize: %d x %d" w h
+
 module Make : S.Framebuffer_M = functor (Backend : S.Backend_S) ->
 struct
   let init init_t =
+    Backend.init_backend init_t >>= fun () ->
     let module Frontend : S.Framebuffer_S with
       type color = Backend.color and type line = Backend.line
     = struct
@@ -146,12 +157,16 @@ let letters t str ~x ~y =
 
   let window ~width ~height : t Lwt.t =
     let _ = internal_resize (* TODO *) in
-    Backend.init ~height:height ~width:width init_t
+    Backend.window init_t ~height:height ~width:width
     >>= fun backend ->
     let t : t = {height; width; b = backend ;
                  text_lines = [] ; font = compile_font backend } in
     Lwt.return t
 
+  let recv_event t = Backend.recv_event t.b
+
+  (* destroy_window: SDL.destroy_window t.b / ...*)
+
 end in
-    (module Frontend : S)
+    Lwt.return (module Frontend : S)
 end
