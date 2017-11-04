@@ -5,6 +5,24 @@ module Make(FB:Framebuffer.S) = struct
     let rec loop () =
       FB.recv_event fb >>= fun ev ->
       Logs.app (fun m -> m "%a" Framebuffer.pp_backend_event ev) ;
+      let open Framebuffer__Keycodes in
+      begin match ev with
+        | Keypress {pressed ; scancode; mask; keysym; mods} ->
+          begin match keysym, mods with
+            | None, _ -> ()
+            | Some ks, kmods ->
+              Logs.app
+                (fun m -> m "parsed keysym: @[down=%b; scancode: %d; mask: %d;\
+                             @ sym: %a; mods: %a; char: %a@]"
+                    pressed scancode mask
+                    Framebuffer__Keycodes.pp_keysym ks
+                    Fmt.(list ~sep:(unit "; ") pp_kmod) kmods
+                    Fmt.(list ~sep:(unit ", ") char)
+                    (US_keyboard.to_unicode kmods ks |> List.map Uchar.to_char)
+                )
+          end
+        | _ -> ()
+      end ;
       loop ()
     in loop ()
 
@@ -32,7 +50,7 @@ module Make(FB:Framebuffer.S) = struct
             | _ -> Lwt_unix.sleep 0.001 >>= finish fb
 end
 
-let main = 
+let main =
   let module A =  Framebuffer.Make(Framebuffer_tsdl) in
   A.init() >>= fun backend ->
   let module FB : Framebuffer.S = (val (backend)) in

@@ -17,9 +17,14 @@ end
 let pp_backend_event (fmt:Format.formatter) : S.backend_event -> unit = function
   | Clipboard_paste str -> Fmt.pf fmt "Clipboard_paste: %S" str
   | Clipboard_request -> Fmt.pf fmt "Clipboard_request"
-  | Keypress -> Fmt.pf fmt "Keypress"
-  | Mouse_button -> Fmt.pf fmt "Mouse_button"
-  | Mouse_motion -> Fmt.pf fmt "Mouse_motion"
+  | Keypress {pressed; scancode; mask; mods; keysym;} ->
+    Fmt.pf fmt "Keypress {pressed: %b scancode: %d mask: %d; \
+                          mods: [%a] ; keysym: %a}"
+      pressed scancode mask
+      Fmt.(list ~sep:(unit "; ") Keycodes.pp_kmod) mods
+      Fmt.(option Keycodes.pp_keysym) keysym
+  | Mouse_button {x;y} -> Fmt.pf fmt "Mouse_button (x: %d, y: %d)" x y
+  | Mouse_motion {x;y} -> Fmt.pf fmt "Mouse_motion (x: %d, y: %d)" x y
   | Window_close -> Fmt.pf fmt "Window_close"
   | Window_focus -> Fmt.pf fmt "Window_focus"
   | Resize (w,h) -> Fmt.pf fmt "Resize: %d x %d" w h
@@ -91,6 +96,10 @@ let listiteri lst f =
     | [] -> Lwt.return_unit
     | hd::tl -> f i hd >>= fun () -> loop (succ i) tl
   in loop 0 lst
+
+let keysym_of_scancode = Backend.keysym_of_scancode
+
+let kmod_of_constant = Backend.kmod_of_constant
 
 let redraw t = Backend.redraw t.b
 

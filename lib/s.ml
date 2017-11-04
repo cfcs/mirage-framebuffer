@@ -1,9 +1,16 @@
 type backend_event =
   | Clipboard_paste of string (** When the user pastes [string] in the window*)
   | Clipboard_request (** When the backend requests our window's clipboard *)
-  | Keypress (** When a keyboard key is pressed or released *)
-  | Mouse_button (** When a mouse button is pressed or released *)
-  | Mouse_motion (** When the mouse is moved (not necessarily within window)*)
+  | Keypress of { pressed : bool ; (** pressed (true) || released (false) *)
+                  scancode : int ; (** The scancode exposed by the backend *)
+                  mask : int ; (** The modifier mask exposed by the backend *)
+                  mods : Keycodes.kmod list ; (** The parsed modifier mask *)
+                  keysym : Keycodes.keysym option ; (** The parsed keysym *)
+                }(** When a keyboard key is pressed or released *)
+  | Mouse_button of { x : int; y : int}
+     (** When a mouse button is pressed or released. y = 0 at the top.*)
+  | Mouse_motion of { x: int ; y : int}
+    (** When the mouse is moved (not necessarily within window)*)
   | Window_close
   | Window_focus
   (* | Window_focus *)
@@ -36,6 +43,9 @@ sig
     -> unit Lwt.t
   val rect_lineiter : backend -> x:int -> y:int -> y_end:int ->
           (int -> line) -> unit Lwt.t
+
+  val keysym_of_scancode : int -> Framebuffer__Keycodes.keysym option
+  val kmod_of_constant : int -> Framebuffer__Keycodes.kmod
 end
 
 type uchar = int
@@ -61,6 +71,8 @@ sig
   val readable : t -> string -> unit Lwt.t
   val window : width:int -> height:int -> t Lwt.t
   val recv_event : t -> backend_event Lwt.t
+  val keysym_of_scancode : int -> Keycodes.keysym option
+  val kmod_of_constant : int -> Keycodes.kmod
 end
 
 module type Framebuffer_M = functor (B : Backend_S) ->

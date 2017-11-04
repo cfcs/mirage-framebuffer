@@ -1,7 +1,7 @@
 (library
  ((name framebuffer_tsdl)
   (public_name mirage-framebuffer-tsdl)
-  (libraries (cstruct mirage-unix lwt mirage-types-lwt rresult mirage-logs logs notty tsdl mirage-framebuffer))
+  (libraries (cstruct mirage-unix lwt mirage-types-lwt rresult mirage-logs logs notty tsdl mirage-framebuffer logs.fmt))
   (wrapped false)
 ))
 

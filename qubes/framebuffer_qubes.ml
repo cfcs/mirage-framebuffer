@@ -124,13 +124,92 @@ let mfndump t =
   |> List.filter (function None -> false | _ -> true)
   |> List.map (function Some x -> x | None -> failwith "TODO implement")
 
+let keysym_of_scancode code =
+  Framebuffer__Keycodes.find_keysym
+    (function
+      | (_, Some x,_) when x <= 0x53 ->
+        (* subtract 8 to go from X11 keycode to "PS/2 Set 1" scancode: *)
+        code - 8 = x
+
+      (* handle cases where X.org differs from IBM XT 1: *)
+      | (_, _, sym) ->
+        begin match code - 8, sym with
+          | 0x57, `F11
+          | 0x58, `F12
+          | 0x60, `Keypad_Enter
+          | 0x61, `Right_Control
+          | 0x62, `Keypad_Slash
+          (*`Print_sysrq -> code = 0x63 *)
+          | 0x64, `Right_Alt
+          (* 0x65: Linefeed *)
+          | 0x66, `Home
+          | 0x67, `Up_Arrow
+          | 0x68, `Page_Up
+          | 0x69, `Left_Arrow
+          | 0x6A, `Right_Arrow
+          | 0x6B, `End
+          | 0x6C, `Down_Arrow
+          | 0x6D, `Page_Down (* aka Next *)
+          | 0x6E, `Insert
+          | 0x6F, `Delete
+          | 0x75, `Keypad_Equals
+          (*| 0x76, plus/minus*)
+          | 0x77, `Pause
+          | 0x79, `Keypad_Comma (* aka KP_Decimal*)
+          | 0x7D, `Left_Meta (* aka Super_L*)
+          (* 0x7E, `Right_Meta (* aka Super_R *) *)
+          | 0x7F, `Keyboard_Menu
+          | 0x80, `Keyboard_Cancel
+          | 0x81, `Keyboard_Again (* aka Redo *)
+          | 0x83, `Keyboard_Undo
+          | 0x88, `Keyboard_Find
+          | 0x8A, `Keyboard_Help
+          | 0x8C, `Calculator
+          (*| 0x8F or 0x97, `Lenovo_Fn, see keycodes.ml  *)
+          | 0xA3, `Scan_Next_Track
+          | 0xA4, `Play_slash__Pause (* XF86AudioPlay / XF86AudioPause *)
+          | 0xA5, `Scan_Previous_Track
+          | 0xBE, `Mute
+            (*| 0xC3, `Mode_switch aka AltGr ?? TODO *)
+            -> true
+
+          | _ -> false
+        end
+    )
+
+let kmod_of_constant = let open Framebuffer__Keycodes in function
+  | 0 -> None
+  | 1 -> Shift
+  | 2 -> Caps_lock
+  | 4 -> Ctrl
+  | 8 -> Alt (* left alt *)
+  | 64 -> Mod1 (* left meta *)
+  | _ -> None (* TODO *)
+
 let rec recv_event (t:backend) : Framebuffer__S.backend_event Lwt.t =
   let open Framebuffer__S in
   GUI.recv_event t.window >>= function
-  | Button _ -> Lwt.return Mouse_button
-  | Keypress _ -> Lwt.return (Keypress : Framebuffer__S.backend_event)
+  | Button {x;y;_} ->
+    Lwt.return (Mouse_button {x = Int32.to_int x ; y = Int32.to_int y})
+  | Keypress {state;keycode;ty; _} ->
+    Log.info (fun m -> m "keypress state: %ld \
+                          keycode %ld ty %ld" state keycode ty);
+    (* XKeyEvent->type KeyPressMask / KeyReleaseMask*)
+    (* see handle_keypress in qubes-gui-agent-linux/gui-agent/vmside.c *)
+    (* keycode/scancode handling: see
+       qubes-gui-agent-windows/gui-agent/xorg-keymap.c
+    *)
+    let scancode = Int32.to_int keycode in
+    let mask = Int32.to_int state in
+    Lwt.return
+      ( Keypress {pressed = Int32.(logand ty 1_l = 0_l); (* 1 = up*)
+                  scancode; mask;
+                  mods = Framebuffer__Keycodes.kmods_of_mask
+                           kmod_of_constant mask;
+                  keysym = keysym_of_scancode scancode ;
+                 } : Framebuffer__S.backend_event)
   | Focus _ -> Lwt.return Window_focus
-  | Motion _ -> Lwt.return Mouse_motion
+  | Motion {x;y;_} -> Lwt.return (Mouse_motion {x; y})
   | Clipboard_data (cstruct:Cstruct.t) ->
     Lwt.return (Clipboard_paste (Cstruct.to_string cstruct))
   | Clipboard_request -> Lwt.return Clipboard_request
@@ -193,18 +272,14 @@ let redraw t =
 
 
 (*
-2017-10-15 14:08:51 -00:00: WRN [qubes.gui] Unexpected data with unknown type: [91 00 00 00 01 00 00 00 08 00 00 00 ] 00 00 00 00 04 00 00 00 a
-2017-10-15 14:08:51 -00:00: INF [qubes.gui] debug_window [1]: UNIT
+[qubes.gui] Unexpected data with unknown type: [91 00 00 00 01 00 00 00 08 00 00 00 ] 00 00 00 00 04 00 00 00 a
+INF [qubes.gui] debug_window [1]: UNIT
+WRN [qubes.gui] Unexpected data with unknown type: [91 00 00 00 01 00 00 00 08 00 00 00 ] 04 00 00 00 00 00 00 00 a
 
 *)
 
 (* keypress:
   x/y: coordinate of the mouse, starting at 0,0: UPPER left corner
-  shift: state land 1
-  caps-lock: state land 2
-  ctrl: state land 4
-  left alt: state land 8
-  left meta: state land 64
 
   keycodes:
   a     38
