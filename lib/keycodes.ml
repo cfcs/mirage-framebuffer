@@ -685,6 +685,24 @@ let default : keymap =
   @ List.mapi (fun i sym -> kshift sym (i+0x30)
     @@ Char.code [|')'; '!'; '@'; '#'; '$'; '%'; '^'; '&'; '*'; '('|].(i))
     [ `_0; `_1; `_2; `_3; `_4; `_5; `_6; `_7; `_8; `_9 ]
+  @ List.map (fun (sym, lower, upper) ->
+      kshift sym (Char.code lower) (Char.code upper))
+    [`Return, '\n', '\n' ;
+     `Tab, '\t', '\t' ;
+     `Space, ' ', ' ' ;
+     `Minus, '-', '_' ;
+     `Equals, '=', '+' ;
+     `Leftbracket, '[', '{' ;
+     `Rightbracket, ']', '}' ;
+     `Backslash, '\\', '|' ;
+     `Semicolon, ';', ':' ;
+     `Apostrophe, '\'', '"' ;
+     `Grave, '`', '~'  ;
+     `Comma, ',', '<' ;
+     `Period, '.', '>' ;
+     `Slash, '/', '?' ;
+     (* TODO keypad characters*)
+    ]
 
 module US_keyboard : Keymap = struct
   let t : keymap =
