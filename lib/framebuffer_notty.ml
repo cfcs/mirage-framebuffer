@@ -53,16 +53,17 @@ module Make(FB:S.Framebuffer_S) = struct
   let set_size t dim = Tmachine.set_size t.trm dim
 
   let create ?(mouse=true) fb =
-    let t = { trm = Tmachine.create ~mouse Notty.Cap.dumb;
+    let t = { trm = Tmachine.create ~mouse ~bpaste:false Notty.Cap.dumb;
               fb
     } in
     set_size t (FB.term_size t.fb) ;
     t
 
-  let rec write t =
-    match Tmachine.output t.trm with
-    | `Output s -> FB.readable t.fb s >>= fun () -> write t
-    | `Await    -> FB.redraw t.fb
+  let write t =
+    let buf = Buffer.create 0 in
+    Tmachine.output t.trm buf ;
+    FB.readable t.fb (Buffer.contents buf) >>= fun () ->
+    FB.redraw t.fb
 
   let refresh t = Tmachine.refresh t.trm; write t
   let image t image = Tmachine.image t.trm image; write t
