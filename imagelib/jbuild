@@ -3,4 +3,5 @@
   (public_name mirage-framebuffer-imagelib)
   (libraries (lwt rresult mirage-logs logs mirage-framebuffer imagelib))
   (wrapped false)
+  (flags (:standard -safe-string))
 ))

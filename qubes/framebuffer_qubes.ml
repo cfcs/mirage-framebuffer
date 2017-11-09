@@ -9,8 +9,8 @@ type t = {
   io_page_arr : Io_page.t array ; (* point to each individual page in io_page *)
   touched_pages : bool array ; (* bitmap tracking which io_page_arr pages have
                                   been modified since last MFNDUMP *)
-  width : int;
-  height: int;
+  mutable width : int;
+  mutable height: int;
   qubes : Qubes.GUI.t ;
   window : Qubes.GUI.window ;
 }
@@ -40,8 +40,7 @@ let pixel (t:backend) ~x ~y (color:color) =
   Io_page.string_blit
     color 0
     t.io_page (y_offset + x*color_w)
-    4 ;
-  Lwt.return_unit (* TODO for now*)
+    4
 
 module Compile = struct
   let rgb ?(r='\x00') ?(g='\x00') ?(b='\x00') _ : color =
@@ -87,27 +86,28 @@ let sub_color_line line offset : (color, [> err]) result =
   else
     Error (`Msg (Fmt.strf "sub_color_line: [%d]: %d" (line_length line) offset))
 
-open Framebuffer.Utils
-
 let horizontal t ~x ~y ~x_end color =
-  lwt_for ~start:(min x 0) (min x_end t.width)
-    (fun x -> pixel t ~y ~x color)
+  for x = min x 0  to min x_end (t.width - 1) do
+    pixel t ~y ~x color
+  done
 
-let draw_line t ~x ~y line : unit Lwt.t =
-  let len = line_length line in
-  lwt_for len
-    (fun l_off ->
+let draw_line t ~x ~y line : unit =
+  for l_off = 0 to line_length line -1 do
       match sub_color_line line l_off with (* TODO *)
       | Ok color -> pixel t ~x:(x+l_off) ~y color
-      | Error _ -> failwith "TODO handle / implement")
+      | Error _ -> failwith "TODO handle / implement"
+  done
 
-let rect_lineiter t ~x ~y ~y_end f : unit Lwt.t =
-  lwt_for (y_end-y)
-    (fun off -> draw_line t ~x ~y:(y+off) (f off))
+
+let rect_lineiter t ~x ~y ~y_end f : unit =
+  for off = 0 to (y_end-y) do
+    draw_line t ~x ~y:(y+off) (f off)
+  done
 
 let rect t ~x ~y ~x_end ~y_end color =
-  lwt_for ~start:(min 0 y) (min t.height y_end)
-    (fun y -> horizontal t ~x ~y ~x_end color)
+  for y = min 0 y to (min (t.height-1) y_end) do
+    horizontal t ~x ~y ~x_end color
+  done
 
 let mfndump t =
   (* returns a list of MFNs touched since last mfndump,
@@ -250,6 +250,18 @@ let window qubes_t ~width ~height : backend Lwt.t =
   )
 
 let init_backend _qubes_t = Lwt.return_unit
+
+let resize ~width ~height t =
+  (* TODO allocate more pixels and copy over (+ scale) old io-page if need be *)
+  t.width <- width ;
+  t.height <- height ;
+  let width, height = Int32.of_int width, Int32.of_int height in
+  GUI.send t.qubes
+    [Formats.GUI.make_msg_configure ~width ~height
+       ~x:0l ~y:0l (* try to give current (x,y) ? *)
+       ~window:(GUI.int32_of_window t.window)] |> resolve_ret
+  (* TODO technically speaking we are required to parse the response from
+          CONFIGURE and cannot just assume that it changed the window size *)
 
 let redraw t =
     let mfns = mfndump t in

@@ -8,9 +8,10 @@ type backend_event =
                   keysym : Keycodes.keysym option ; (** The parsed keysym *)
                 }(** When a keyboard key is pressed or released *)
   | Mouse_button of { x : int; y : int}
-     (** When a mouse button is pressed or released. y = 0 at the top.*)
+    (** When a mouse button is pressed or released. y = 0 at the top.
+        TODO Need to expose which button, and the state (pressed/released) etc*)
   | Mouse_motion of { x: int ; y : int}
-    (** When the mouse is moved (not necessarily within window)*)
+    (** When the mouse is moved (not necessarily within window) *)
   | Window_close
   | Window_focus
   (* | Window_focus *)
@@ -33,16 +34,17 @@ sig
 
   val init_backend : init_handle -> unit Lwt.t
   val window : init_handle -> width:int -> height:int -> backend Lwt.t
+  val resize : width:int -> height:int -> backend -> unit Lwt.t
   val recv_event : backend -> backend_event Lwt.t
   val redraw : backend -> unit Lwt.t
   val set_title : backend -> string -> unit ret
-  val pixel : backend -> x:int -> y:int -> color -> unit Lwt.t
-  val horizontal : backend -> x:int -> y:int -> x_end:int -> color -> unit Lwt.t
-  val draw_line : backend -> x:int -> y:int -> line -> unit Lwt.t
+  val pixel : backend -> x:int -> y:int -> color -> unit
+  val horizontal : backend -> x:int -> y:int -> x_end:int -> color -> unit
+  val draw_line : backend -> x:int -> y:int -> line -> unit
   val rect : backend -> x:int -> y:int -> x_end:int -> y_end:int -> color
-    -> unit Lwt.t
+    -> unit
   val rect_lineiter : backend -> x:int -> y:int -> y_end:int ->
-          (int -> line) -> unit Lwt.t
+          (int -> line) -> unit
 
   val keysym_of_scancode : int -> Framebuffer__Keycodes.keysym option
   val kmod_of_constant : int -> Framebuffer__Keycodes.kmod
@@ -60,16 +62,23 @@ sig
   val compile_line : color list -> t -> line
 
   val redraw : t -> unit Lwt.t
-  val letter : t -> uchar -> x:int -> y:int -> unit Lwt.t
-  val letters : t -> string -> x:int -> y:int -> unit Lwt.t
-  val pixel : t -> x:int -> y:int -> color -> unit Lwt.t
-  val rect : t -> x:int -> y:int -> x_end:int -> y_end:int -> color ->
-    unit Lwt.t
-  val rect_lineiter : t -> x:int -> y:int -> y_end:int -> (int -> line) ->
-    unit Lwt.t
+  val letter : t -> uchar -> x:int -> y:int -> unit
+  val letters : t -> string -> x:int -> y:int -> unit
+  val pixel : t -> x:int -> y:int -> color -> unit
+  val rect : t -> x:int -> y:int -> x_end:int -> y_end:int -> color -> unit
+  val rect_lineiter : t -> x:int -> y:int -> y_end:int -> (int -> line) -> unit
+
   val term_size : t -> int * int
-  val readable : t -> string -> unit Lwt.t
+  (** [term_size t] returns the (width,height) dimensions currently available
+      for a text console using the builtin font *)
+
   val window : width:int -> height:int -> t Lwt.t
+  (** [window ~width ~height] opens a new window [t]*)
+
+  val resize : width:int -> height:int -> t -> unit Lwt.t
+  (** [resize ~width ~height t] attempts to resize the window [t]
+      TODO error handling? *)
+
   val recv_event : t -> backend_event Lwt.t
   val keysym_of_scancode : int -> Keycodes.keysym option
   val kmod_of_constant : int -> Keycodes.kmod

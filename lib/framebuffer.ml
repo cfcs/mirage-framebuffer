@@ -81,21 +81,14 @@ let compile_font backend : font_table =
 
 let t_iteri t t_len t_get f =
   let stop = t_len t in
-  let open Lwt.Infix in
   let rec loop = function
-  | i when i = stop -> Lwt.return_unit
-  | i -> f i (t_get i) >>= fun () -> loop (succ i)
+  | i when i = stop -> ()
+  | i -> f i (t_get i) ; loop (succ i)
   in loop 0
 
 (*let arrayiteri arr f = t_iteri arr Array.length (Array.get arr) f*)
 
 let stringiteri str f = t_iteri str String.length (String.get str) f
-
-let listiteri lst f =
-  let rec loop i = function
-    | [] -> Lwt.return_unit
-    | hd::tl -> f i hd >>= fun () -> loop (succ i) tl
-  in loop 0 lst
 
 let keysym_of_scancode = Backend.keysym_of_scancode
 
@@ -120,7 +113,7 @@ let letter (t:t) codepoint ~x ~y =
   rect_lineiter t ~x ~y ~y_end (fun i -> letter.(i))
 
 let letters t str ~x ~y =
-    stringiteri str
+  stringiteri str
       (fun i -> fun ch ->
          let x2 = (min (t.width -8) (x+(8*i))) in
          let y2 = (min y (t.height - 16)) in
@@ -129,43 +122,14 @@ let letters t str ~x ~y =
                                 ~y:y2
     )
 
-  let term_size t = (t.width / 8) , (t.height /16)
+  let term_size t = (t.width / font_w) , (t.height / font_h)
 
-  let readable t str =
-    let (width,height) = term_size t in
-    let lines =
-    let take_last n lst =
-      let rec loop acc i = function
-        | [] -> acc | _ when i <= 0 -> acc
-        | hd::tl -> loop (hd::acc) (pred i) tl
-      in loop [] n (List.rev lst)
-    in
-    let lines = take_last height @@
-      ((String.split_on_char '\n' str) |> List.rev) @ t.text_lines
-    in
-    let rec fill acc = function
-      | [] -> acc
-      | hd::tl when String.length hd > width ->
-        let hdl = String.length hd in
-        fill ((String.sub hd (hdl-width) width)::acc)
-             ((String.sub hd 0 (hdl-width))::tl)
-      | hd::tl -> fill (hd::acc) tl
-    in fill [] lines |> take_last height |> List.rev_map
-         (fun s -> let len = String.length s in if len < width
-           then String.concat "" [s;String.make (width - len) ' ']
-           else s) in
-    let() = Log.info (fun m -> m "Strs: %a" Fmt.(list ~sep:(unit "~")string) lines) in
-    let() = t.text_lines <- lines in
-    listiteri t.text_lines (fun y line -> letters t line ~x:0 ~y:(y*16))
-      >>= fun () -> redraw t
-
-  let internal_resize t ~width ~height =
+  let resize ~width ~height t =
     t.width <- width ;
     t.height <- height ;
-    Lwt.return_unit
+    Backend.resize ~width ~height t.b
 
   let window ~width ~height : t Lwt.t =
-    let _ = internal_resize (* TODO *) in
     Backend.window init_t ~height:height ~width:width
     >>= fun backend ->
     let t : t = {height; width; b = backend ;

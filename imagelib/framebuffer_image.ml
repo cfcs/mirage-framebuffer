@@ -1,8 +1,8 @@
-open! Image
+open Image
 
 module Make(FB : Framebuffer.S) =
 struct
-  let draw_image (fb:FB.t) {Image.width;height;pixels;_ } : unit Lwt.t =
+  let draw_image (fb:FB.t) {Image.width;height;pixels;_ } : unit =
   let r, g, b =
     let normalize = function
     | Image.Pixmap.Pix8 pixmap -> fun x y ->
@@ -17,11 +17,10 @@ struct
         normalize white, normalize white, normalize white
     end
   in
-  let open Framebuffer.Utils in
-  lwt_for height
-  (fun (y:int) ->
-    lwt_for width
-      (fun (x:int) ->
-         let color = FB.compile_rgb ~r:(r x y) ~g:(g x y) ~b:(b x y) fb in
-         FB.pixel fb ~x ~y (color : FB.color)))
+  for y = 0 to height - 1 do
+    for x = 0 to width - 1 do
+      let color = FB.compile_rgb ~r:(r x y) ~g:(g x y) ~b:(b x y) fb in
+      FB.pixel fb ~x ~y (color : FB.color)
+    done
+  done
 end

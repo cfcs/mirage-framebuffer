@@ -1,6 +1,22 @@
 open Tsdl
 open Rresult
 
+(* TODO this is currently a big mess, with lots of memory leaks.
+        It seems there are two main directions to go:
+     - using Textures, which may be optimized(?)
+        - Sdl.update_texture for blitting to the texture,
+        - Sdl.render_copy to update the current view?
+        - redraw: Sdl.render_present
+        - TODO look into Sdl.get_render_target
+     - using Surfaces, which are basically pixel framebuffer arrays
+        - https://wiki.libsdl.org/SDL_BlitSurface
+          - copying to current window surface:
+            https://wiki.libsdl.org/SDL_GetWindowSurface
+        - redraw: https://wiki.libsdl.org/SDL_UpdateWindowSurface
+                  https://wiki.libsdl.org/SDL_UpdateWindowSurfaceRects
+
+*)
+
 (* consider using cairo2 / `opam install cairo` and xlib bindings instead
    https://www.cypherpunk.at/2014/11/cairo-graphics-and-x11xlib/
    https://www.cairographics.org/Xlib/ *)
@@ -160,7 +176,10 @@ let event_loop () : unit Lwt.t =
 
 (* TODO use Sdl.lock_surface / Sdl.lock_texture *)
 
-let redraw (b:backend) = Sdl.render_present b.renderer ; Lwt.return_unit
+let redraw (b:backend) =
+  (*Sdl.render_present b.renderer *)
+  Sdl.update_window_surface b.window |> R.get_ok
+  ; Lwt.return_unit
 
 let recv_event (b:backend) : Framebuffer__S.backend_event Lwt.t =
   Lwt_mvar.take b.event_mvar
@@ -180,6 +199,17 @@ let window (() :init_handle) ~width ~height =
   (* Sdl.destroy_window w ; Sdl.quit () *)
   Lwt.return backend
 
+let resize ~width ~height t =
+  Sdl.set_window_size t.window ~w:width ~h:height ;
+  let mode = match Sdl.get_window_display_mode t.window with
+    | Ok m -> m
+    | _ -> failwith "should not happen: Tsdl.Sdl.get_window_display" in
+  ignore @@ Sdl.set_window_display_mode t.window
+    {mode with dm_w = width ; dm_h = height } ;
+  Logs.debug (fun m -> m "resize: %d %d %a" width height
+                Fmt.(pair int int) (Sdl.get_window_size t.window));
+  Lwt.return_unit
+
 let init_backend ((): init_handle) =
   Logs.set_reporter @@ Logs_fmt.reporter ~dst:Format.std_formatter () ;
   Logs.(set_level @@ Some Debug); (* TODO *)
@@ -188,9 +218,10 @@ let init_backend ((): init_handle) =
   Lwt.return_unit
 
 type 'a ret = 'a
+type color = Sdl.uint32 (*Sdl.color*)
 type line = { w : int; (*width, in pixels *)
-              texture: Sdl.texture} (*(int32, Bigarray.int32_elt) bigarray*)
-type color = int32 (*Sdl.color*)
+              ba: (color, Bigarray.int32_elt, Bigarray.c_layout)
+                    Bigarray.Array1.t}
 
 (*let my_pixel_format_enum = Sdl.Pixel.format_rgb888*)
 (* consider (get_current_display_mode |> R.get_ok).dm_format
@@ -205,57 +236,61 @@ struct
   let rgb ?(r='\x00') ?(g='\x00') ?(b='\x00') (_:backend) =
     (*Sdl.Color.create ~r:(Char.code r) ~g:(Char.code g) ~b:(Char.code b)
       ~a:sdl_ALPHA_OPAQUE*)
-    let open Int32 in
+    (*let open Int32 in -- for textures:
        add (shift_left (of_int @@ int_of_char r) 24)
            (shift_left (of_int @@ int_of_char g) 16)
     |> add (shift_left (of_int @@ int_of_char b) 8)
-    |> add sdl_ALPHA_OPAQUE
+      |> add sdl_ALPHA_OPAQUE*)
+    let open Int32 in (* for surfaces: *)
+       add (shift_left (of_int @@ int_of_char r) 16)
+           (shift_left (of_int @@ int_of_char g) 8)
+    |> add (shift_left (of_int @@ int_of_char b) 0)
+    |> add (shift_left sdl_ALPHA_OPAQUE 24)
 
-  let line (lst:color list) b : line =
-    let w = List.length lst and depth = 32 in
-    let rmask = 0xff_00_00_00_l
-    and gmask = 0xff_00_00_l
-    and bmask = 0xff_00l in
-    let open Tsdl.Sdl in
-    let surface : surface =
-      Sdl.create_rgb_surface ~w ~h:1 ~depth
-        rmask gmask bmask sdl_ALPHA_OPAQUE
-      |> R.get_ok in
-    assert(Sdl.lock_surface surface = Ok ());
-    let ba = Sdl.get_surface_pixels surface Bigarray.int32 in
+  let line (lst:color list) _backend : line =
+    let w = List.length lst in
+    let ba = Bigarray.Array1.create Bigarray.int32 Bigarray.C_layout w in
     List.iteri (fun i (p:int32) -> Bigarray.Array1.set ba i p) lst;
-    Sdl.unlock_surface surface ;
-    let texture =
-      Sdl.create_texture_from_surface b.renderer surface |> R.get_ok in
-    let()=Sdl.free_surface surface in {w ; texture}
+    {w ; ba}
 
   let lineiter f i b = line (Array.init i f |> Array.to_list) b
 end
 
-let draw_line (b:backend) ~(x:int) ~(y:int) ({w;texture}:line) =
+let draw_line (b:backend) ~(x:int) ~(y:int) ({w;ba}:line) =
   (*log "drawing line x:%d y:%d w:%d" x y w;*)
-  ignore @@ Sdl.render_copy ~dst:(Sdl.Rect.create ~x ~y ~w ~h:1) b.renderer texture ;
-  Lwt.return_unit
+  let wss = Sdl.get_window_surface b.window |> R.get_ok in
+  (*Sdl.lock_surface wss |> R.get_ok;*)
+  let surface_ba = (wss |> Sdl.get_surface_pixels) Bigarray.Int32 in
+  let ws_w,ws_h = Sdl.get_surface_size wss in
+  let sub_surface = Bigarray.Array1.(sub surface_ba (ws_w*y+x)
+                                       (min (ws_w*ws_h-w) w)) in
+  Bigarray.Array1.blit ba sub_surface
+  (*ignore @@ Sdl.render_copy ~dst:(Sdl.Rect.create ~x ~y ~w ~h:1) b.renderer texture*)
   (*Sdl.render_fill_rects_ba b.renderer l ;*)
 
 let rect_lineiter (b:backend) ~x ~y ~y_end f =
-  let open Framebuffer.Utils in
-  lwt_for (y_end - y)
-    (fun off -> draw_line b ~x ~y:(y+off) (f off))
+  for off = 0 to (y_end - y) -1 do
+    draw_line b ~x ~y:(y+off) (f off)
+  done
 
 let horizontal (b:backend) ~(x:int) ~(y:int) ~(x_end:int) (c:color) =
   draw_line b ~x ~y (Compile.lineiter (fun _ -> c) (max (x_end-x) 0) b)
 
-open Framebuffer.Utils
-
 let rect (b:backend) ~(x:int) ~(y:int) ~(x_end:int) ~(y_end:int) (c:color) =
-  lwt_for ~start:(max y 0) y_end
-    (fun y -> horizontal b ~x ~y ~x_end c)
+  for y = max y 0 to y_end do (* TODO bounds checking *)
+    horizontal b ~x ~y ~x_end c
+  done
   (* https://github.com/dbuenzli/tsdl/blob/master/test/test.ml#L122 *)
 
 
-let pixel (b:backend) ~(x:int) ~(y:int) (c:color) : unit Lwt.t=
-  horizontal b ~x ~y ~x_end:(x+1) c
+let pixel (b:backend) ~(x:int) ~(y:int) (c:color) : unit =
+  let wss = Sdl.get_window_surface b.window |> R.get_ok in
+  (*Sdl.lock_surface wss |> R.get_ok;*)
+  let ba = (wss |> Sdl.get_surface_pixels) Bigarray.Int32 in
+  let w,_h = Sdl.get_surface_size wss in
+  ba.{y * (w) + x} <- c
+  (*Sdl.unlock_surface wss;*)
+(*horizontal b ~x ~y ~x_end:(x+1) c*)
   (* Sdl.set_render_draw_color b.renderer r g b 0xFF;
      Sdl.render_draw_point b.renderer x y |> R.get_ok ;
      redraw b

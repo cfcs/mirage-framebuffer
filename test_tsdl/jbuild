@@ -4,7 +4,7 @@
 ))
 (alias
  ((name    runtest)
-  (deps   (test_tsdl.exe))
+  (deps   (test_tsdl.bc))
   (action (chdir ../../..
             (run ${<})))
  )

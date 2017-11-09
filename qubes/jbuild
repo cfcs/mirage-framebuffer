@@ -4,4 +4,5 @@
   (libraries (cstruct lwt mirage-types-lwt rresult mirage-logs logs notty mirage-framebuffer
     mirage-qubes mirage-xen vchan-xen xen-evtchn xen-gnt))
   (wrapped false)
+  (flags (:standard -safe-string))
 ))
