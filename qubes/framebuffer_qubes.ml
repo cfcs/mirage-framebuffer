@@ -100,7 +100,7 @@ let draw_line t ~x ~y line : unit =
 
 
 let rect_lineiter t ~x ~y ~y_end f : unit =
-  for off = 0 to (y_end-y) do
+  for off = 0 to min (t.height -1) (y_end-y) do
     draw_line t ~x ~y:(y+off) (f off)
   done
 
