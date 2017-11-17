@@ -10,7 +10,7 @@ let mods_of_kmods lst : Notty.Unescape.mods =
 
 let event_of_backend_event : S.backend_event -> Notty.Unescape.event list
   = function
-  | Keypress {keysym; mods; _} ->
+    | Keypress {keysym; mods; pressed = false; _ } -> (* when key is released *)
     let notty_mods = mods_of_kmods mods in
     begin match keysym with
       | Some `Left_Arrow -> [`Key (`Arrow `Left, notty_mods)]
@@ -101,7 +101,7 @@ end
       type t = {
         trm : Tmachine.t ;
         window : FB.t ;
-        mutable text_lines : string list ;
+        text_lines : string array ;
         mutable image : Notty.image ;
       }
 
@@ -110,17 +110,13 @@ end
       let image t image = t.image <- image; Tmachine.image t.trm image
 
       let output_tty t str =
-      let (width,height) = size t in
-      let lines =
-        let take_last n lst =
-          let rec loop acc i = function
-            | [] -> acc | _ when i <= 0 -> acc
-            | hd::tl -> loop (hd::acc) (pred i) tl
-          in loop [] n (List.rev lst)
+        let (width,height) = size t in
+        let rpad_spaces s =
+          let len = String.length s in if len < width
+          then String.concat "" [s;String.make (width - len) ' ']
+          else s
         in
-        let lines = take_last height @@
-          (t.text_lines @ ((String.split_on_char '\n' str |> List.rev))) |> List.rev
-        in
+        let new_lines = String.split_on_char '\n' in
         let rec fill acc = function
           | [] -> acc
           | hd::tl when String.length hd > width ->
@@ -128,22 +124,46 @@ end
             fill ((String.sub hd (hdl-width) width)::acc)
               ((String.sub hd 0 (hdl-width))::tl)
           | hd::tl -> fill (hd::acc) tl
-        in fill [] lines |> take_last height |> List.rev_map
-             (fun s -> let len = String.length s in if len < width
-               then String.concat "" [s;String.make (width - len) ' ']
-               else s) in
+        in
+        let take_last n lst =
+          let rec loop acc i = function
+            | [] -> acc | _ when i <= 0 -> acc
+            | hd::tl -> loop (hd::acc) (pred i) tl
+          in loop [] n (List.rev lst)
+        in
+        let line_list =
+          new_lines str |> fill [] |> take_last height |> List.map rpad_spaces
+        in
       let() = Logs.info (fun m -> m "Strs: %a"
-                           Fmt.(list ~sep:(unit "~")string) lines) in
-      let() = t.text_lines <- lines in
-      List.iteri (fun y line -> FB.letters t.window line ~x:0 ~y:(y*16)) (*TODO 16 = font_h*)
-        t.text_lines;
-      FB.redraw t.window
+                           Fmt.(list ~sep:(unit "~")string) line_list) in
+        let dim = Array.length t.text_lines in
+        let lst_dim = List.length line_list in
+        for i = 0 to dim - 1 do (* 0 -> (10-1)-2 = 8*)
+          if 0 > i - lst_dim then () (* discard *)
+          else begin
+            (* shift previous line *)
+            t.text_lines.(i - lst_dim) <- t.text_lines.(i)
+          end
+        done ;
+        for i = dim-1 downto max 0 (dim - lst_dim) do (*(10-1) to 10 - 2*)
+          (* insert new content *)
+          t.text_lines.(i) <- List.nth line_list (dim-1-i)
+        done;
+        (* only draw what fits into (size t): *)
+        let offset = dim - height in
+        for y = height-1 downto 0 do
+          FB.letters t.window t.text_lines.(y+offset)
+            ~x:0 ~y:(y*16) (*TODO 16 = font_h*)
+        done ;
+        FB.redraw t.window
 
       let create ?(dispose=true) ?(mouse=true) ~window () =
         let _ = dispose in (* TODO *)
+        let _, height = FB.term_size window in
         let t = { trm = Tmachine.create ~mouse ~bpaste:true Notty.Cap.dumb ;
                   window ;
-                  text_lines = [] ;
+                  text_lines = Array.init height (* TODO this is debug output:*)
+                      (fun i -> String.make 3 (Char.chr ((i mod 10)+0x30))) ;
                   image = Notty.I.empty
                 } in
         set_size t (size t) ;
@@ -173,8 +193,10 @@ end
           Lwt.return (event_of_backend_event b_ev)
           >>= Lwt_list.iter_s (begin function
               | `Key (`Uchar x, _) ->
-                image t Notty.I.(t.image <->
-                                 string A.empty ("X: "^String.make 1 @@ Uchar.to_char x)); refresh t
+                let s = String.make 1 @@ Uchar.to_char x in
+                (*image t Notty.I.(t.image <->
+                                 string A.empty ("X: "^s); refresh t*)
+                output_tty t s
               | _ -> Lwt.return_unit
             end) >>= loop
           (* TODO *)
