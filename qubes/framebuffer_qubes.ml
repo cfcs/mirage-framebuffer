@@ -220,7 +220,8 @@ let rec recv_event (t:backend) : Framebuffer__S.backend_event Lwt.t =
 
 let window qubes_t ~width ~height : backend Lwt.t =
   (* 32 bits per pixel, rounded up: *)
-  let page_count = ((height * width * (32/8)) |> Io_page.round_to_page_size)
+  let _pixels = height * width in (* TODO handle resizing instead *)
+  let page_count = ((1300 * 1000 * (32/8)) |> Io_page.round_to_page_size)
                    / Io_page.page_size in
   let open Gnt.Gntshr in
   Gnt.Gntshr.with_gntshr
