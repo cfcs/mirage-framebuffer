@@ -33,7 +33,7 @@ They define functors to be applied with a framebuffer module, for example `image
 
 - `mirage-framebuffer-notty`: Helper library defining `Framebuffer_notty` for use with [David Kaloper](https://github.com/pqwy)'s [notty](https://github.com/pqwy/notty), a declarative (text-based) terminal library.
 
-I hope that there will one day be a helper library for Daniel Bünzli's [vg library](http://erratique.ch/software/vg) for declarative 2D graphics, but I am waiting in the hope that someone will do the hard work of writing a TTF/OTF font rasterizer to enable this effort, so there is no active development on this.
+I hope that there will one day be a helper library for Daniel Bünzli's [vg library](http://erratique.ch/software/vg) for declarative 2D graphics, but there is no active development on this.
 
 ### Using the library
 
