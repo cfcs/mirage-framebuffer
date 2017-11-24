@@ -48,24 +48,26 @@ An example is included in [test_tsdl/test_tsdl.ml](./test_tsdl/test_tdl.ml#L80).
 
 ```
 # Patches to Mirage:
-opam pin add mirage --dev -k git 'https://github.com/cfcs/mirage#fix_qubes'
+opam pin add -n mirage 'https://github.com/cfcs/mirage#fix_qubes'
 
 # The main Framebuffer library:
-opam pin add mirage-framebuffer --dev -k git 'https://github.com/cfcs/mirage-framebuffer#master'
+opam pin add -n mirage-framebuffer 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
 # imagelib helper:
-opam pin add mirage-framebuffer-imagelib --dev -k git 'https://github.com/cfcs/mirage-framebuffer#master'
+opam pin add -n mirage-framebuffer-imagelib 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
 # Notty helper:
-opam pin add mirage-framebuffer-notty --dev -k git 'https://github.com/cfcs/mirage-framebuffer#master'
+opam pin add -n mirage-framebuffer-notty 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
 # TSDL backend:
-opam pin add mirage-framebuffer-tsdl --dev -k git 'https://github.com/cfcs/mirage-framebuffer#master'
+opam pin add -n mirage-framebuffer-tsdl 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
 # QubesOS backend and required patched packages:
-opam pin add mirage-xen --dev -k git 'https://github.com/cfcs/mirage-platform#virt_to_mfn'
-opam pin add mirage-qubes --dev -k git 'https://github.com/cfcs/mirage-qubes#guid_mvar'
-opam pin add mirage-framebuffer-qubes --dev -k git 'https://github.com/cfcs/mirage-framebuffer#master'
+opam pin add -n mirage-xen   'https://github.com/cfcs/mirage-platform.git#virt_to_mfn'
+opam pin add -n mirage-qubes 'https://github.com/cfcs/mirage-qubes.git#guid_mvar'
+opam pin add -n mirage-framebuffer-qubes 'https://github.com/cfcs/mirage-framebuffer.git#master'
+
+opam install mirage-framebuffer{,-tsdl,-qubes,-notty,-imagelib}
 ```
 
 ### Sample TSDL backend
