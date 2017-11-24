@@ -13,9 +13,9 @@ Contributions in the form of code, comments, ideas, research, or bug reports are
 
 Currently two backends are supported:
 
-- `mirage-framebuffer-tsdl`: A backend using Daniel Bünzli's [tsdl library](http://erratique.ch/software/tsdl) that exposes bindings to [libSDL](https://www.libsdl.org)
+- `mirage-framebuffer-tsdl`: A backend using [Daniel Bünzli](https://github.com/dbuenzli)'s [tsdl library](http://erratique.ch/software/tsdl) that exposes bindings to [libSDL](https://www.libsdl.org)
 
-- `mirage-framebuffer-qubes`: A backend that builds on Thomas Leonard's [mirage-qubes library](https://github.com/talex5/mirage-qubes) to implement the [QubesOS-GUId](https://www.qubes-os.org/doc/gui/) protocol for graphics from inside a MirageOS unikernel running as a QubesOS AppVM.
+- `mirage-framebuffer-qubes`: A backend that builds on [Thomas Leonard](https://github.com/talex5)'s [mirage-qubes library](https://github.com/talex5/mirage-qubes) to implement the [QubesOS-GUId](https://www.qubes-os.org/doc/gui/) protocol for graphics from inside a MirageOS unikernel running as a QubesOS AppVM.
 
 I also [have plans](https://github.com/cfcs/mirage-framebuffer/issues/1) to implement an RDP/VNC backend that would act as a server exposing your graphical interfaces over a network connection.
 
@@ -29,9 +29,9 @@ existing OCaml libraries with `mirage-framebuffer`.
 They define functors to be applied with a framebuffer module, for example `imagelib` can be instantited with the TSDL backend:
 `Framebuffer_image.Make( Framebuffer.Make(Framebuffer_tsdl) )`.
 
-- `mirage-framebuffer-imagelib`: Helper library defining `Framebuffer_image` for Rodolphe Lepigre's [imagelib](https://github.com/rlepigre/ocaml-imagelib), a pure picture format parser.
+- `mirage-framebuffer-imagelib`: Helper library defining `Framebuffer_image` for [Rodolphe Lepigre](https://github.com/rlepigre)'s [imagelib](https://github.com/rlepigre/ocaml-imagelib), a pure picture format parser.
 
-- `mirage-framebuffer-notty`: Helper library defining `Framebuffer_notty` for use with David Kaloper's [notty](https://github.com/pqwy/notty), a declarative (text-based) terminal library.
+- `mirage-framebuffer-notty`: Helper library defining `Framebuffer_notty` for use with [David Kaloper](https://github.com/pqwy)'s [notty](https://github.com/pqwy/notty), a declarative (text-based) terminal library.
 
 I hope that there will one day be a helper library for Daniel Bünzli's [vg library](http://erratique.ch/software/vg) for declarative 2D graphics, but I am waiting in the hope that someone will do the hard work of writing a TTF/OTF font rasterizer to enable this effort, so there is no active development on this.
 
