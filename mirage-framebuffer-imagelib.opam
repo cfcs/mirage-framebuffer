@@ -22,4 +22,4 @@ depends: [
   "mirage-framebuffer"
   "imagelib" { >= "20171028" }
 ]
-available: [ocaml-version >= "4.04.0"]
+available: [ocaml-version >= "4.04.2"]

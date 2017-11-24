@@ -52,16 +52,16 @@ module Make(FB:Framebuffer.S) = struct
 
   let terminal () =
     FB.window ~width:300 ~height:300 >>= fun window ->
-    let module Tty = Framebuffer__Tty.Make(FB) in
+    let module Tty = Framebuffer_notty.Make(FB) in
     let term = Tty.Term.create ~window () in
     Lwt.async (Tty.Term.debug_events term) ;
-    Tty.Term.image term Notty.(I.(string A.(fg black) "hello world"
-                                  <-> I.string A.empty "world 1"
-                                  <-> I.string A.empty "world 2"
-                                  <-> I.string A.empty "world 3"
-                                  <-> I.string A.empty "world 3"
-                                  <-> I.string A.empty "world 4"
-                                  <-> I.string A.empty "world 5"));
+    Tty.Term.image term Notty.(I.(string A.(fg black) ""
+                                  <-> I.string A.empty "hello, week 47"
+                                  <-> I.string A.empty "line 2"
+                                  <-> I.string A.empty "line 3"
+                                  <-> I.string A.empty "line 3"
+                                  <-> I.string A.empty "line 4"
+                                  <-> I.string A.empty "line 5"));
     Tty.Term.refresh term
 
   let run () =

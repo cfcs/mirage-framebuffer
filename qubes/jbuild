@@ -1,8 +1,9 @@
 (library
  ((name framebuffer_qubes)
   (public_name mirage-framebuffer-qubes)
-  (libraries (cstruct lwt mirage-types-lwt rresult mirage-logs logs notty mirage-framebuffer
-    mirage-qubes mirage-xen vchan-xen xen-evtchn xen-gnt))
+  (libraries (cstruct lwt mirage-types-lwt rresult mirage-logs logs
+              mirage-framebuffer
+              mirage-qubes mirage-xen vchan-xen xen-evtchn xen-gnt))
   (wrapped false)
   (flags (:standard -safe-string))
 ))

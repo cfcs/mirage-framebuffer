@@ -1,0 +1,8 @@
+(library
+ ((name framebuffer_notty)
+  (public_name mirage-framebuffer-notty)
+  (libraries (cstruct lwt mirage-types-lwt rresult mirage-logs logs notty mirage-framebuffer logs.fmt))
+  (wrapped false)
+  (flags (:standard -safe-string))
+))
+

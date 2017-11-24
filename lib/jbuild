@@ -1,6 +1,6 @@
 (library
  ((name framebuffer)
   (public_name mirage-framebuffer)
-  (libraries (cstruct lwt mirage-types-lwt rresult mirage-logs logs notty))
+  (libraries (cstruct lwt mirage-types-lwt rresult mirage-logs logs))
   (flags (:standard -safe-string))
 ))

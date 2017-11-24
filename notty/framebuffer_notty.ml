@@ -8,7 +8,7 @@ let mods_of_kmods lst : Notty.Unescape.mods =
       | Shift -> `Shift::acc
       | _ -> acc ) [] lst
 
-let event_of_backend_event : S.backend_event -> Notty.Unescape.event list
+let event_of_backend_event : Framebuffer__S.backend_event -> Notty.Unescape.event list
   = function
     | Keypress {keysym; mods; pressed = false; _ } -> (* when key is released *)
     let notty_mods = mods_of_kmods mods in
@@ -79,7 +79,7 @@ sig
   val debug_events : t -> unit -> unit Lwt.t
 end
 
-module Make : functor (FB : S.Framebuffer_S) ->
+module Make : functor (FB : Framebuffer__S.Framebuffer_S) ->
 sig
   type fdescr = FB.t (* Unix.file_descr *)
   type ret = unit Lwt.t
@@ -91,7 +91,7 @@ sig
   (*val output_image_endline : ?cap:Cap.t -> ?clear:bool -> image -> ret*)
   module Term : Pqwy_term with type fdescr = fdescr and type ret = ret
 end
-  = functor (FB : S.Framebuffer_S) ->
+  = functor (FB : Framebuffer__S.Framebuffer_S) ->
   struct
 
     module Term = struct
@@ -112,9 +112,10 @@ end
       let output_tty t str =
         let (width,height) = size t in
         let rpad_spaces s =
+          (* TODO verify that notty takes care of this
           let len = String.length s in if len < width
           then String.concat "" [s;String.make (width - len) ' ']
-          else s
+          else*) s
         in
         let new_lines = String.split_on_char '\n' in
         let rec fill acc = function
@@ -192,11 +193,13 @@ end
             (*Logs.debug (fun m -> m "b_ev: %a" Framebuffer.pp_backend_event b_ev); TODO move out from Framebuffer *)
           Lwt.return (event_of_backend_event b_ev)
           >>= Lwt_list.iter_s (begin function
+              | `Key (`Enter, _) ->
+                Logs.debug (fun m -> m "got enter");
+                image t Notty.I.(t.image <-> string A.empty "h"); refresh t
               | `Key (`Uchar x, _) ->
                 let s = String.make 1 @@ Uchar.to_char x in
-                (*image t Notty.I.(t.image <->
-                                 string A.empty ("X: "^s); refresh t*)
-                output_tty t s
+                image t Notty.I.(t.image <|>
+                                 string A.empty (s)); refresh t
               | _ -> Lwt.return_unit
             end) >>= loop
           (* TODO *)
