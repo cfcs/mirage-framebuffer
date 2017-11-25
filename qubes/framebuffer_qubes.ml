@@ -44,12 +44,12 @@ let pixel (t:backend) ~x ~y (color:color) =
 
 module Compile = struct
   let rgb ?(r='\x00') ?(g='\x00') ?(b='\x00') _ : color =
-    let s = Bytes.create 4 in
-    Bytes.unsafe_set s 3 '\x7f' ; (* ignored by Qubes *)
-    Bytes.unsafe_set s 2 r ;
-    Bytes.unsafe_set s 1 g ;
-    Bytes.unsafe_set s 0 b ;
-    Bytes.to_string s
+    String.init 4 (function
+        | 0 -> b
+        | 1 -> g
+        | 2 -> r
+        | _ -> '\x7f' (* little-endian MSB; ignored by Qubes*)
+      )
 
   let lineiter (f: int -> color) len _ : line =
     (* For some reason Bytes.blit doesn't seem to work *)
@@ -270,10 +270,18 @@ let redraw t =
 
     let width = Int32.of_int t.width and height = Int32.of_int t.height in
     (* http://xenbits.xen.org/gitweb/?p=xen.git;a=blob;f=xen/include/xen/mm.h;h=88de3c1fa6bb64bde8867ec4b53a18844b099be4;hb=HEAD *)
-    let our_mfndump = Formats.GUI.make_msg_mfndump ~domid:0 ~width ~height ~mfns ~window:(GUI.int32_of_window t.window) in
-    GUI.send t.qubes [our_mfndump] >>= function
+    let window = GUI.int32_of_window t.window in
+    let x, y = 0_l , 0_l in
+    GUI.send t.qubes
+      [ (* Resize the window: *)
+        Formats.GUI.make_msg_configure ~window ~x ~y ~width ~height ;
+        (* signal the touched MFNs: *)
+        Formats.GUI.make_msg_mfndump ~width ~height ~mfns ~window ;
+        (* force X.org redraw: *)
+        Formats.GUI.make_msg_shmimage ~window ~x ~y ~height ~width ;
+      ] >>= function
     | `Ok () -> Lwt.return ()
-    | `Eof -> error "EOF during MSG_MFNDUMP"
+    | `Eof -> error "EOF during redraw"
 
     (*send_wmhints()*)
 (*    let our_wmhints = Formats.GUI.make_msg_window_hints ~height ~width in

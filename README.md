@@ -4,7 +4,7 @@
 
 This repository contains a work-in-progress framebuffer graphics library for [MirageOS](https://mirage.io), written in the [OCaml](https://ocaml.org) programming language.
 
-The library exposes basic operations such as pixel blitting, resize and input / window resize events.
+The library exposes basic operations such as pixel blitting, and input / window resize events.
 
 The codebase is still under development and the interfaces are very volatile and change often.
 Contributions in the form of code, comments, ideas, research, or bug reports are *very* welcome, but please give me a heads-up in the form of a Github issue if you plan to introduce large changesets that may conflict with my local branches.
