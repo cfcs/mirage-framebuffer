@@ -8,7 +8,8 @@ let mods_of_kmods lst : Notty.Unescape.mods =
       | Shift -> `Shift::acc
       | _ -> acc ) [] lst
 
-let event_of_backend_event : Framebuffer__S.backend_event -> Notty.Unescape.event list
+let event_of_backend_event
+  : Framebuffer__S.backend_event -> Notty.Unescape.event list
   = function
     | Keypress {keysym; mods; pressed = false; _ } -> (* when key is released *)
     let notty_mods = mods_of_kmods mods in
@@ -101,7 +102,7 @@ end
       type t = {
         trm : Tmachine.t ;
         window : FB.t ;
-        text_lines : string array ;
+        mutable text_lines : (int * string array) ;
         mutable image : Notty.image ;
       }
 
@@ -110,21 +111,16 @@ end
       let image t image = t.image <- image; Tmachine.image t.trm image
 
       let output_tty t str =
-        let (width,height) = size t in
-        let rpad_spaces s =
-          (* TODO verify that notty takes care of this
-          let len = String.length s in if len < width
-          then String.concat "" [s;String.make (width - len) ' ']
-          else*) s
-        in
-        let new_lines = String.split_on_char '\n' in
-        let rec fill acc = function
-          | [] -> acc
-          | hd::tl when String.length hd > width ->
-            let hdl = String.length hd in
-            fill ((String.sub hd (hdl-width) width)::acc)
-              ((String.sub hd 0 (hdl-width))::tl)
-          | hd::tl -> fill (hd::acc) tl
+        let line_wrap (width:int) str =
+          assert (width <> 0);
+          let rec wrap acc = function
+            | [] -> acc
+            | hd::tl when String.length hd > width ->
+              let hdl = String.length hd in
+              wrap ((String.sub hd (hdl-width) width)::acc)
+                ((String.sub hd 0 (hdl-width))::tl)
+            | hd::tl -> wrap (hd::acc) tl
+          in wrap [] @@ String.split_on_char '\n' str
         in
         let take_last n lst =
           let rec loop acc i = function
@@ -132,30 +128,64 @@ end
             | hd::tl -> loop (hd::acc) (pred i) tl
           in loop [] n (List.rev lst)
         in
-        let line_list =
-          new_lines str |> fill [] |> take_last height |> List.map rpad_spaces
+        let (width,height) = size t in
+        let offset , lines = t.text_lines in
+        Logs.debug (fun m -> m "width: %d height: %d offset: %d" width height offset);
+        let append_to_current, line_list =
+          let offset_line_len = String.length lines.(offset) in
+          match offset_line_len < width, line_wrap width str |> take_last height with
+          | true,
+            ( ""::tl (* can append, but input is empty *)
+            | ([] as tl) (* can append, but we're appending a newline *)
+            )
+          | false, tl -> "", List.rev tl (* can NOT append; we're on a new line *)
+          | true , first::tl ->
+            begin match line_wrap (width - offset_line_len)
+                          first with
+            | first_line::first_tl ->
+              Logs.debug (fun m -> m "appending: %S truncating %a new lines: %a"
+                             first_line
+                             Fmt.(list ~sep:(unit ";") string) first_tl
+                             Fmt.(list ~sep:(unit ";") string) tl
+                         ); (*TODO the truncating is not good *)
+              first_line, List.rev tl
+              | [] -> "", List.rev tl
+            end
         in
-      let() = Logs.info (fun m -> m "Strs: %a"
-                           Fmt.(list ~sep:(unit "~")string) line_list) in
-        let dim = Array.length t.text_lines in
+        let() = Logs.info (fun m -> m "appending to current line: %S\nStrs: %a"
+                              append_to_current
+                           Fmt.(list ~sep:(unit "~") string) line_list) in
+        let dim = Array.length lines in
         let lst_dim = List.length line_list in
-        for i = 0 to dim - 1 do (* 0 -> (10-1)-2 = 8*)
-          if 0 > i - lst_dim then () (* discard *)
-          else begin
+        let old = max 0 (dim - lst_dim) in (* number of old lines to retain *)
+        let dropped = dim - old in
+        Logs.debug (fun m -> m "adim: %d lst_dim %d old %d dropped %d" dim lst_dim old dropped);
+        Logs.debug (fun m -> m "Current array: %a"
+                       Fmt.(array ~sep:(unit ";") string) lines);
+        for i = dropped to dim-1 do (* 0 -> (10-1)-2 = 8*)
             (* shift previous line *)
-            t.text_lines.(i - lst_dim) <- t.text_lines.(i)
-          end
+          lines.(i-dropped) <-
+            (if i = dim-1 then lines.(i) ^ append_to_current
+               else lines.(i))
         done ;
-        for i = dim-1 downto max 0 (dim - lst_dim) do (*(10-1) to 10 - 2*)
-          (* insert new content *)
-          t.text_lines.(i) <- List.nth line_list (dim-1-i)
-        done;
+        Logs.debug (fun m -> m "Current array shifted: %a"
+                       Fmt.(array ~sep:(unit ";") string) lines);
+
+        let new_offset = min (dim-1) (offset + lst_dim) in
+        for i = old to dim-1 do
+          lines.(i) <- List.nth line_list (i-old)
+        done ;
         (* only draw what fits into (size t): *)
         let offset = dim - height in
+        let rpad_spaces s =
+          let len = String.length s in if len < width
+          then String.concat "" [s;String.make (width - len) ' '] else s
+        in
         for y = height-1 downto 0 do
-          FB.letters t.window t.text_lines.(y+offset)
+          FB.letters t.window (rpad_spaces lines.(y+offset))
             ~x:0 ~y:(y*16) (*TODO 16 = font_h*)
         done ;
+        t.text_lines <- (new_offset, lines) ;
         FB.redraw t.window
 
       let create ?(dispose=true) ?(mouse=true) ~window () =
@@ -163,8 +193,10 @@ end
         let _, height = FB.term_size window in
         let t = { trm = Tmachine.create ~mouse ~bpaste:true Notty.Cap.dumb ;
                   window ;
-                  text_lines = Array.init height (* TODO this is debug output:*)
-                      (fun i -> String.make 3 (Char.chr ((i mod 10)+0x30))) ;
+                  text_lines = height-1,
+                               Array.init height (* TODO this is debug output:*)
+                                 (fun i ->
+                                   String.make 3 (Char.chr ((i mod 10)+0x30))) ;
                   image = Notty.I.empty
                 } in
         set_size t (size t) ;
@@ -193,13 +225,20 @@ end
             (*Logs.debug (fun m -> m "b_ev: %a" Framebuffer.pp_backend_event b_ev); TODO move out from Framebuffer *)
           Lwt.return (event_of_backend_event b_ev)
           >>= Lwt_list.iter_s (begin function
+              | `Key (`Escape, _)-> output_tty t "abcdef\n1234\nyolo567"
+              | `Key (`Uchar x, _) ->
+                let s = String.make 1 @@ Uchar.to_char x in
+                Logs.debug (fun m -> m "outputting %S" s);
+                output_tty t s
+              | `Key (`Enter, _)->output_tty t "\n"
+              (*
               | `Key (`Enter, _) ->
                 Logs.debug (fun m -> m "got enter");
                 image t Notty.I.(t.image <-> string A.empty "h"); refresh t
               | `Key (`Uchar x, _) ->
                 let s = String.make 1 @@ Uchar.to_char x in
-                image t Notty.I.(t.image <|>
-                                 string A.empty (s)); refresh t
+                image t Notty.I.(t.image <->
+                                 string A.empty (s)); refresh t*)
               | _ -> Lwt.return_unit
             end) >>= loop
           (* TODO *)
