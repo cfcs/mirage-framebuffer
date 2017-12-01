@@ -64,6 +64,7 @@ sig
   val redraw : t -> unit Lwt.t
   val letter : t -> uchar -> x:int -> y:int -> unit
   val letters : t -> string -> x:int -> y:int -> unit
+  val output_tty : t -> int * int -> string -> unit Lwt.t
   val pixel : t -> x:int -> y:int -> color -> unit
   val rect : t -> x:int -> y:int -> x_end:int -> y_end:int -> color -> unit
   val rect_lineiter : t -> x:int -> y:int -> y_end:int -> (int -> line) -> unit

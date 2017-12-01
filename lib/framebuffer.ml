@@ -45,7 +45,7 @@ struct
         mutable height : int ;
         mutable width  : int ;
         b : Backend.backend;
-        mutable text_lines : string list;
+        mutable text_lines : (int * string array);
         font : font_table
       }
 
@@ -141,15 +141,98 @@ struct
       let window ~width ~height : t Lwt.t =
         Backend.window init_t ~height:height ~width:width
         >>= fun backend ->
+        let tty_backlog_size = 1000 in
         let t : t = {height; width; b = backend ;
-                     text_lines = [] ; font = compile_font backend } in
+                     text_lines = tty_backlog_size -
+                                  height / font_h,
+                                  Array.make tty_backlog_size "" ;
+                     font = compile_font backend } in
         Lwt.return t
 
       let recv_event t = Backend.recv_event t.b
 
       (* destroy_window: SDL.destroy_window t.b / ...*)
 
+      let output_tty (t:t) (width,height) str =
+        let line_wrap (width:int) str =
+          assert (width <> 0);
+          let rec wrap acc = function
+            | [] -> acc
+            | hd::tl when String.length hd > width ->
+              let hdl = String.length hd in
+              wrap ((String.sub hd (hdl-width) width)::acc)
+                ((String.sub hd 0 (hdl-width))::tl)
+            | hd::tl -> wrap (hd::acc) tl
+          in wrap [] @@ String.split_on_char '\n' str
+        in
+        let take_last n lst =
+          let rec loop acc i = function
+            | [] -> acc | _ when i <= 0 -> acc
+            | hd::tl -> loop (hd::acc) (pred i) tl
+          in loop [] n (List.rev lst)
+        in
+        let offset , lines = t.text_lines in
+        Logs.debug (fun m -> m "width: %d height: %d offset: %d"
+                                     width    height     offset);
+        let append_to_current, line_list =
+          let offset_line_len = String.length lines.(offset) in
+          match offset_line_len < width,
+                List.rev (line_wrap width str |> take_last height) with
+          | true, ( ""::tl (* can append, but input is empty *)
+                  | ([] as tl) (* can append, but we're appending a newline *)
+                  )
+          | false, tl -> "", tl (* can NOT append; we're on a new line *)
+          | true , first::tl when
+              (offset_line_len + String.length first) <= width ->
+            first, tl
+          | true, first::tl -> (* first is too long*)
+            let take_len = width - offset_line_len in
+            let first_line = String.sub first 0 take_len in
+            let first_tl =
+              String.sub first take_len (String.length first - take_len) in
+            first_line, first_tl::tl
+        in
+        let() = Logs.info (fun m -> m "appending to current line: %S\nStrs: %a"
+                              append_to_current
+                           Fmt.(list ~sep:(unit "~") string) line_list) in
+        let dim = Array.length lines in
+        let lst_dim = List.length line_list in
+        let old = max 0 (dim - lst_dim) in (* number of old lines to retain *)
+        let dropped = dim - old in
+        Logs.debug (fun m -> m "adim: %d lst_dim %d old %d dropped %d"
+                                     dim    lst_dim    old    dropped);
+        Logs.debug (fun m -> m "Current array: %a"
+                       Fmt.(array ~sep:(unit ";") string) lines);
+        for i = dropped to dim-1 do (* 0 -> (10-1)-2 = 8*)
+            (* shift previous line *)
+          lines.(i-dropped) <-
+            (if i = dim-1 then lines.(i) ^ append_to_current
+               else lines.(i))
+        done ;
+        Logs.debug (fun m -> m "Current array shifted: %a"
+                       Fmt.(array ~sep:(unit ";") string) lines);
+
+        let new_offset = min (dim-1) (offset + lst_dim) in
+        for i = old to dim-1 do
+          lines.(i) <- List.nth line_list (i-old)
+        done ;
+        Logs.debug (fun m -> m "New array: %a"
+                       Fmt.(array ~sep:(unit ";") string) lines);
+
+        (* only draw what fits into (size t): *)
+        let offset = dim - height in
+        let rpad_spaces s =
+          let len = String.length s in if len < width
+          then String.concat "" [s;String.make (width - len) ' '] else s
+        in
+        for y = height-1 downto 0 do
+          letters t (rpad_spaces lines.(y+offset))
+            ~x:0 ~y:(y*16) (*TODO 16 = font_h*)
+        done ;
+        t.text_lines <- (new_offset, lines) ;
+        redraw t
+
     end
-    in
+    in (* pack the module and return from [Make.init] *)
     Lwt.return (module Frontend : S)
 end
