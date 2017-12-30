@@ -110,15 +110,16 @@ struct
 
       let letter (t:t) codepoint ~x ~y =
         (* draws a letter occupying pixels x -> x+8 ; y -> y+16*)
-(*
-  assert (0 < x);
-  assert (x <= t.width);
-  assert (0 <= y);
-  assert (x <= t.height);*)
 
-        let letter = Hashtbl.(find t.font codepoint) in
+        assert (0 <= x);
+        assert (x <= t.width);
+        assert (0 <= y);
+        assert (x <= t.height);
+
+        let letter = try Hashtbl.(find t.font codepoint) with
+        _ -> failwith ("letter lookup failed for "^string_of_int codepoint)  in
         let y_end = min t.height (y+font_h) in
-        rect_lineiter t ~x ~y ~y_end (fun i -> letter.(i))
+          rect_lineiter t ~x ~y ~y_end (fun i -> letter.(i) )
 
       let letters t str ~x ~y =
         stringiteri str

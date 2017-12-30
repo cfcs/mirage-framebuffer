@@ -37,10 +37,12 @@ let set_title t title = GUI.set_title t.window title
 let pixel (t:backend) ~x ~y (color:color) =
   let y_offset = t.width * y * 4 in
   assert (color_w = String.length color) ;
-  Io_page.string_blit
+  try
+    Io_page.string_blit
     color 0
     t.io_page (y_offset + x*color_w)
     4
+   with | _ -> failwith "pixel blitting failed"
 
 module Compile = struct
   let rgb ?(r='\x00') ?(g='\x00') ?(b='\x00') _ : color =
@@ -82,13 +84,15 @@ type err = [`Msg of string]
 
 let sub_color_line line offset : (color, [> err]) result =
   if offset < (line_length line) && offset >= 0 then
-    Ok (String.sub line (offset * color_w) 4)
+    try
+      Ok (String.sub line (offset * color_w) 4)
+        with _ -> failwith "sub_color_line"
   else
     Error (`Msg (Fmt.strf "sub_color_line: [%d]: %d" (line_length line) offset))
 
 let horizontal t ~x ~y ~x_end color =
   for x = max x 0  to min x_end (t.width - 1) do
-    pixel t ~y ~x color
+    pixel t ~y:(max 0 (min (t.height-1) y)) ~x color
   done
 
 let draw_line t ~x ~y line : unit =
@@ -96,10 +100,11 @@ let draw_line t ~x ~y line : unit =
       match sub_color_line line l_off with (* TODO *)
       | Ok color -> pixel t ~x:(x+l_off) ~y color
       | Error _ -> failwith "TODO handle / implement"
+      | exception _ -> failwith "sub_color_line failed"
   done
 
 let rect_lineiter t ~x ~y ~y_end f : unit =
-  for off = 0 to min (t.height -1) (y_end-y) do
+  for off = 0 to min (t.height - 1) (y_end-y-1) do
     draw_line t ~x ~y:(y+off) (f off)
   done
 
@@ -113,7 +118,7 @@ let mfndump t =
      and resets the page touch tracker *)
   (* TODO mark t.touched_pages.(..) <- false after dumping *)
   (* TODO replace this mess, consider just making a (Io_page.t * true) array*)
-  Log.warn (fun f -> f "entering mfndump t");
+  Log.debug (fun f -> f "entering mfndump t");
   let mfn_of_iopage p =
     Io_page.get_addr p |> OS.MM.virt_to_mfn |> Nativeint.to_int32 in
   Array.mapi (fun i -> function
@@ -265,7 +270,7 @@ let resize ~width ~height t =
 
 let redraw t =
     let mfns = mfndump t in
-    Log.warn (fun f -> f "MFNS: %d" List.(length mfns)) ;
+    Log.debug (fun f -> f "MFNS: %d" List.(length mfns)) ;
 
     let width = Int32.of_int t.width and height = Int32.of_int t.height in
     (* http://xenbits.xen.org/gitweb/?p=xen.git;a=blob;f=xen/include/xen/mm.h;h=88de3c1fa6bb64bde8867ec4b53a18844b099be4;hb=HEAD *)
