@@ -43,7 +43,7 @@ module Make(FB:Framebuffer.S) = struct
     FB.letter fb 0x61 ~x:30 ~y:30 ; FB.redraw fb
 
   let draw_letters fb () =
-    FB.letters fb ~x:50 ~y: 50 "hello" ; FB.redraw fb
+    FB.letters fb ~x:0 ~y: 50 "hello world" ; FB.redraw fb
 
   let rec finish fb () =
     FB.recv_event fb >>= function
@@ -68,8 +68,8 @@ module Make(FB:Framebuffer.S) = struct
       FB.window ~width:100 ~height:100 >>= fun fb ->
       Lwt.async (pp_events fb);
       rainbow fb () >>=
-      draw_pixels fb >>= fun () ->
-      draw_a_letter fb () >>=
+      (*draw_pixels fb >>= fun () ->
+      draw_a_letter fb () >>=*)
       draw_letters fb >>=
       terminal >>=
       finish fb

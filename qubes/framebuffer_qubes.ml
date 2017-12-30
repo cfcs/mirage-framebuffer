@@ -87,7 +87,7 @@ let sub_color_line line offset : (color, [> err]) result =
     Error (`Msg (Fmt.strf "sub_color_line: [%d]: %d" (line_length line) offset))
 
 let horizontal t ~x ~y ~x_end color =
-  for x = min x 0  to min x_end (t.width - 1) do
+  for x = max x 0  to min x_end (t.width - 1) do
     pixel t ~y ~x color
   done
 
@@ -98,14 +98,13 @@ let draw_line t ~x ~y line : unit =
       | Error _ -> failwith "TODO handle / implement"
   done
 
-
 let rect_lineiter t ~x ~y ~y_end f : unit =
   for off = 0 to min (t.height -1) (y_end-y) do
     draw_line t ~x ~y:(y+off) (f off)
   done
 
 let rect t ~x ~y ~x_end ~y_end color =
-  for y = min 0 y to (min (t.height-1) y_end) do
+  for y = max 0 y to min (t.height-1) y_end do
     horizontal t ~x ~y ~x_end color
   done
 

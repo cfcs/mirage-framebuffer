@@ -67,7 +67,7 @@ opam pin add -n mirage-xen   'https://github.com/cfcs/mirage-platform.git#virt_t
 opam pin add -n mirage-qubes 'https://github.com/cfcs/mirage-qubes.git#guid_mvar'
 opam pin add -n mirage-framebuffer-qubes 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
-opam install mirage-framebuffer{,-tsdl,-qubes,-notty,-imagelib}
+opam install --dev mirage-framebuffer{,-tsdl,-qubes,-notty,-imagelib}
 ```
 
 ### Sample TSDL backend
