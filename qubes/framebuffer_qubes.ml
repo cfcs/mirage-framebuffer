@@ -238,7 +238,8 @@ let window qubes_t ~width ~height : backend Lwt.t =
      Log.info (fun f -> f "Set up %d shared pages with dom0" page_count);
      (*TODO assert (page_count = Io_page.length mapping / 4096);*)
      (let width = Int32.of_int width and height = Int32.of_int height in
-       (resolve_ret @@ Qubes.GUI.create_window ~width ~height qubes_t)
+       (resolve_ret @@ Qubes.GUI.create_window ~x:0l ~y:0l ~title:"my qubes title"
+       ~width ~height qubes_t)
      ) >>= fun window ->
      let t =
        { height; width;
