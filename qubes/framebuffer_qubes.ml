@@ -120,7 +120,7 @@ let mfndump t =
   (* TODO replace this mess, consider just making a (Io_page.t * true) array*)
   Log.debug (fun f -> f "entering mfndump t");
   let mfn_of_iopage p =
-    Io_page.get_addr p |> OS.MM.virt_to_mfn |> Nativeint.to_int32 in
+    Io_page.get_addr p |> OS.Xen.virt_to_mfn |> Nativeint.to_int32 in
   Array.mapi (fun i -> function
   | false -> None
   | true -> Some (mfn_of_iopage t.io_page_arr.(i))
