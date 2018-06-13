@@ -15,13 +15,15 @@ build: [
 depends: [
   "ocamlfind" {build}
   "jbuilder"  {build & >="1.0+beta9"}
-  "cstruct" { >= "1.9.0" }
-  "lwt" { >= "3.1.0" & < "4.0.0" }
-  "fmt" { >= "0.8.4" }
-  "mirage-types-lwt" { >= "3.0.0" }
-  "logs" { >= "0.5.0" }
+
+  "cstruct"            { >= "1.9.0" }
+  "fmt"                { >= "0.8.4" }
+  "logs"               { >= "0.5.0" }
+  "lwt"                { >= "3.1.0" & < "4.0.0" }
   "mirage-framebuffer"
-  "rresult" {>= "0.5.0"}
-  "notty" {>= "0.2.1" & <"3.0.0"}
+  "mirage-logs"
+  "mirage-types-lwt"   { >= "3.0.0" }
+  "notty"              { >= "0.2.1" & <"3.0.0"}
+  "rresult"            { >= "0.5.0" }
 ]
 available: [ocaml-version >= "4.04.2"]
