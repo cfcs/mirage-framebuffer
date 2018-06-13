@@ -15,6 +15,7 @@ build: [
 depends: [
   "ocamlfind" {build}
   "jbuilder"  {build & >="1.0+beta16"}
+  "topkg-jbuilder" {build}
   "cstruct" { >= "3.1.1" }
   "lwt" {>= "3.1.0" & <"4.0.0"}
   "fmt" {>= "0.8.4"}
