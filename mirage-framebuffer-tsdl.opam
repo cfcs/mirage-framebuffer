@@ -19,7 +19,7 @@ depends: [
   "cstruct" { >= "1.9.0" }
   "fmt" { >= "0.8.4" }
   "logs" { >= "0.5.0" }
-  "lwt" { >= "3.1.0" & < "4.0.0" }
+  "lwt" { >= "4.1.0" & < "4.2.0" }
   "mirage-framebuffer"
   "mirage-logs"
   "mirage-types-lwt" { >= "3.0.0" }
