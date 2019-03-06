@@ -63,7 +63,6 @@ opam pin add -n mirage-framebuffer-notty 'https://github.com/cfcs/mirage-framebu
 opam pin add -n mirage-framebuffer-tsdl 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
 # QubesOS backend and required patched packages:
-opam pin add -n mirage-xen   'https://github.com/cfcs/mirage-platform.git#virt_to_mfn'
 opam pin add -n mirage-qubes 'https://github.com/cfcs/mirage-qubes.git#guid_mvar'
 opam pin add -n mirage-framebuffer-qubes 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
