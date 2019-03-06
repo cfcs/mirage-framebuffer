@@ -8,15 +8,12 @@ license:      "gopher://license.to.chill"
 tags: "org:mirage"
 
 build: [
-  [ "jbuilder" "subst"] {pinned}
-  [ "jbuilder" "build" "-p" name "-j" jobs ]
+  [ "dune" "subst"] {pinned}
+  [ "dune" "build" "-p" name "-j" jobs ]
 ]
 
 depends: [
-  "ocamlfind" {build}
-  "jbuilder"  {build & >="1.0+beta16"}
-  "topkg-jbuilder" {build}
-
+  "dune"  {build & >= "1.0"}
   "cstruct"          { >= "3.1.1" }
   "fmt"              { >= "0.8.4"}
   "logs"             { >= "0.6.2" }
