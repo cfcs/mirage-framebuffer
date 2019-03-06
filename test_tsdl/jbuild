@@ -8,7 +8,7 @@
 (alias
  ((name    runtest)
   (deps   (test_tsdl.bc))
-  (action (chdir ../../..
-            (run ${<})))
+  (action 
+            (run ${<}))
  )
 )
