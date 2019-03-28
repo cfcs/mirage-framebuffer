@@ -1,9 +1,9 @@
-opam-version: "1.2"
+opam-version: "2.0"
 maintainer:   "noreply@example.com"
 authors:      ["Joe Hill"]
 homepage:     "https://github.com/mirage/mirage-framebuffer"
 bug-reports:  "https://github.com/mirage/mirage-framebuffer/issues"
-dev-repo:     "https://github.com/mirage/mirage-framebuffer.git"
+dev-repo:     "git+https://github.com/mirage/mirage-framebuffer.git"
 license:      "gopher://license.to.chill"
 tags: "org:mirage"
 
@@ -25,5 +25,5 @@ depends: [
   "mirage-types-lwt"   { >= "3.0.0" }
   "notty"              { >= "0.2.1" & <"3.0.0"}
   "rresult"            { >= "0.5.0" }
+  "ocaml"              { >= "4.04.2" }
 ]
-available: [ocaml-version >= "4.04.2"]

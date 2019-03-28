@@ -1,9 +1,10 @@
-opam-version: "1.2"
+opam-version: "2.0"
+synopsis:     "Helper module to paint Imagelib pictures"
 maintainer:   "noreply@example.com"
 authors:      ["Joe Hill"]
 homepage:     "https://github.com/cfcs/mirage-framebuffer"
 bug-reports:  "https://github.com/cfcs/mirage-framebuffer/issues"
-dev-repo:     "https://github.com/cfcs/mirage-framebuffer.git"
+dev-repo:     "git+https://github.com/cfcs/mirage-framebuffer.git"
 license:      "gopher://license.to.chill"
 tags: "org:mirage"
 
@@ -23,5 +24,5 @@ depends: [
   "mirage-framebuffer"
   "mirage-types-lwt" { >= "3.0.0" }
   "rresult"
+  "ocaml"            { >= "4.04.2" }
 ]
-available: [ocaml-version >= "4.04.2"]
