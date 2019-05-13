@@ -1,13 +1,13 @@
 open Mirage
 
 type framebuffer_ty = Framebuffer_ty
-let framebuffer = Type Framebuffer_ty
+let framebuffer_typ = Mirage.typ Framebuffer_ty
 
-let config_framebuffer =
+let framebuffer =
   impl @@ object inherit Mirage.base_configurable
     method module_name = "Framebuffer_placeholder_goes_here"
     method name = "framebuffer"
-    method ty = framebuffer
+    method ty = framebuffer_typ
     method! packages : package list value =
     (Key.match_ Key.(value target) @@ begin function
       | `Xen -> [package ~min:"0.4" "mirage-qubes";
