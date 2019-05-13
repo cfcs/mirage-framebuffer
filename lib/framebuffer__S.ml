@@ -1,3 +1,5 @@
+module Keycodes = Framebuffer__Keycodes
+
 type backend_event =
   | Clipboard_paste of string (** When the user pastes [string] in the window*)
   | Clipboard_request (** When the backend requests our window's clipboard *)

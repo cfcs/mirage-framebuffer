@@ -3,6 +3,9 @@ open Lwt.Infix
 type uchar = int
 (* let screenshot t = TODO *)
 
+module S = Framebuffer__S
+module Keycodes = Framebuffer__Keycodes
+
 module type Backend_S = S.Backend_S
 module type S = S.Framebuffer_S
 
