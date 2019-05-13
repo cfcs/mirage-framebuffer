@@ -4,7 +4,7 @@ open Qubes
 type 'ok ret = 'ok Qubes.S.or_eof Lwt.t
 
 type t = {
-  gntrefs : Gnt.gntref list ;
+  gntrefs : OS.Xen.Gntref.t list ; (* TODO seems unused? *)
   io_page  : Io_page.t ; (* spans several pages, allows consecutive blitting *)
   io_page_arr : Io_page.t array ; (* point to each individual page in io_page *)
   touched_pages : bool array ; (* bitmap tracking which io_page_arr pages have
@@ -227,33 +227,30 @@ let window qubes_t ~width ~height : backend Lwt.t =
   let _pixels = height * width in (* TODO handle resizing instead *)
   let page_count = ((1300 * 1000 * (32/8)) |> Io_page.round_to_page_size)
                    / Io_page.page_size in
-  let open Gnt.Gntshr in
-  Gnt.Gntshr.with_gntshr
-  (fun interface ->
-    begin match share_pages interface 0 page_count
-                  false (*TODO: false? this is the read/write bit*) with
-    | None -> failwith ("what we can't share "^(string_of_int page_count)
+  begin match OS.Xen.Export.share_pages ~domid:0 ~count:page_count
+                ~writable:false with
+    | Error _ -> failwith ("what we can't share "^(string_of_int page_count)
                         ^" pages with dom0")
-  | Some { refs ; mapping } ->
-     Log.info (fun f -> f "Set up %d shared pages with dom0" page_count);
-     (*TODO assert (page_count = Io_page.length mapping / 4096);*)
-     (let width = Int32.of_int width and height = Int32.of_int height in
+    | Ok grant ->
+      Log.info (fun f -> f "Set up %d shared pages with dom0" page_count);
+      (*TODO assert (page_count = Io_page.length mapping / 4096);*)
+      (let width = Int32.of_int width and height = Int32.of_int height in
        (resolve_ret @@ Qubes.GUI.create_window ~x:0l ~y:0l ~title:"my qubes title"
-       ~width ~height qubes_t)
-     ) >>= fun window ->
-     let t =
-       { height; width;
-         io_page = mapping ;
-         io_page_arr = Io_page.to_pages mapping |> Array.of_list ;
-         touched_pages = Array.make page_count true ; (* send all first time *)
-         gntrefs = refs;
-         qubes = qubes_t;
-         window;
-      }
-     in
-     Lwt.return t
+          ~width ~height qubes_t)
+      ) >>= fun window ->
+      let mapping = OS.Xen.Export.mapping grant in
+      let t =
+        { height; width;
+          io_page = mapping ;
+          io_page_arr = Io_page.to_pages mapping |> Array.of_list ;
+          touched_pages = Array.make page_count true ; (* send all first time *)
+          gntrefs = OS.Xen.Export.refs grant;
+          qubes = qubes_t;
+          window;
+        }
+      in
+      Lwt.return t
   end
-  )
 
 let init_backend _qubes_t = Lwt.return_unit
 
