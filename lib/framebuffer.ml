@@ -5,6 +5,7 @@ type uchar = int
 
 module S = Framebuffer__S
 module Keycodes = Framebuffer__Keycodes
+include Mirage_impl_framebuffer
 
 module type Backend_S = S.Backend_S
 module type S = S.Framebuffer_S

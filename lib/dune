@@ -2,5 +2,7 @@
  (name framebuffer)
  (public_name mirage-framebuffer)
  (wrapped false)
+ (modules mirage_impl_framebuffer framebuffer framebuffer__S framebuffer__Keycodes Bitmapfont)
+ (private_modules Bitmapfont)
  (libraries cstruct lwt mirage mirage-types-lwt rresult mirage-logs logs)
 )

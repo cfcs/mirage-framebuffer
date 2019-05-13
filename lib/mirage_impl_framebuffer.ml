@@ -18,6 +18,8 @@ let framebuffer =
       end)
     |> Mirage.Key.map (List.cons (package "mirage-framebuffer"))
     method! deps = []
+
+    (* TODO use [method! build] to build this wrapper instead?] *)
     method! connect mirage_info _modname _args =
       Key.eval (Info.context mirage_info) @@
       Key.match_ Key.(value target) @@ begin function

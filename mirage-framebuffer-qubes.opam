@@ -26,6 +26,5 @@ depends: [
   "mirage-xen" { >= "3.0.6" }
   "vchan-xen" { >= "3.0.0" }
   "xen-evtchn" {>= "2.0.0" }
-  "xen-gnt" { >= "3.0.1" }
   "ocaml"            { >= "4.04.2" }
 ]
