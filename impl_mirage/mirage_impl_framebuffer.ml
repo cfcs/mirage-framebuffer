@@ -1,7 +1,7 @@
 open Mirage
 
-type framebuffer_ty = Framebuffer_ty
-let framebuffer_typ = Mirage.typ Framebuffer_ty
+type framebuffer_ty = Framebuffer_ty [@@inline]
+let framebuffer_typ = Type Framebuffer_ty
 
 let framebuffer =
   impl @@ object inherit Mirage.base_configurable

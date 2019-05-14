@@ -1,0 +1,6 @@
+(library
+ (name mirage_impl_framebuffer)
+ (public_name mirage-impl-framebuffer)
+ (wrapped true)
+ (libraries mirage mirage-types-lwt rresult)
+)
