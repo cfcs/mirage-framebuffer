@@ -47,14 +47,13 @@ An example is included in [test_tsdl/test_tsdl.ml](./test_tsdl/test_tdl.ml#L80).
 ### Installing dependencies
 
 ```
-# Patches to Mirage:
-opam pin add -n mirage 'https://github.com/cfcs/mirage#fix_qubes'
-
 # The main Framebuffer library:
 opam pin add -n mirage-framebuffer 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
 # imagelib helper:
 opam pin add -n mirage-framebuffer-imagelib 'https://github.com/cfcs/mirage-framebuffer.git#master'
+opam pin add -n imagelib 'https://github.com/cfcs/ocaml-imagelib#gif_prelim'
+opam pin add -n imagelib-unix 'https://github.com/cfcs/ocaml-imagelib#gif_prelim'
 
 # Notty helper:
 opam pin add -n mirage-framebuffer-notty 'https://github.com/cfcs/mirage-framebuffer.git#master'
@@ -62,11 +61,13 @@ opam pin add -n mirage-framebuffer-notty 'https://github.com/cfcs/mirage-framebu
 # TSDL backend:
 opam pin add -n mirage-framebuffer-tsdl 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
-# QubesOS backend and required patched packages:
-opam pin add -n mirage-qubes 'https://github.com/cfcs/mirage-qubes.git#guid_mvar'
+# QubesOS backend:
 opam pin add -n mirage-framebuffer-qubes 'https://github.com/cfcs/mirage-framebuffer.git#master'
+## Patches to mirage-qubes (upstreamed to master awaiting release):
+opam pin add -n mirage-qubes 'https://github.com/mirage/mirage-qubes'
 
-opam install --dev mirage-framebuffer{,-tsdl,-qubes,-notty,-imagelib}
+
+opam install imagelib-unix mirage-framebuffer{,-tsdl,-qubes,-notty,-imagelib}
 ```
 
 ### Sample TSDL backend

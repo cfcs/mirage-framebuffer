@@ -27,7 +27,7 @@ module Make(FB:Framebuffer.S) = struct
     in loop ()
 
   let rainbow fb () =
-    let img = ImageLib.openfile "test_tsdl/rainbow.png" in
+    let img = ImageLib_unix.openfile "test_tsdl/rainbow.png" in
     let module IMG = Framebuffer_image.Make(FB) in
     IMG.draw_image fb img ; FB.redraw fb
 

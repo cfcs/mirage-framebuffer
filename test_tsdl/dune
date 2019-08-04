@@ -1,7 +1,8 @@
 (executables
  (names test_tsdl)
  (libraries mirage-framebuffer-tsdl mirage-framebuffer
-   mirage-framebuffer-imagelib mirage-framebuffer-notty logs.fmt imagelib))
+   mirage-framebuffer-imagelib mirage-framebuffer-notty logs.fmt imagelib
+   imagelib-unix))
 
 (alias
  (name runtest)

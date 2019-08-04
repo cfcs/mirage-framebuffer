@@ -195,6 +195,8 @@ let rec recv_event (t:backend) : Framebuffer__S.backend_event Lwt.t =
   GUI.recv_event t.window >>= function
   | Button {x;y;_} ->
     Lwt.return (Mouse_button {x = Int32.to_int x ; y = Int32.to_int y})
+  | Configure _ ->
+    Logs.warn (fun m -> m "received CONFIGURE"); recv_event t
   | Keypress {state;keycode;ty; _} ->
     Log.info (fun m -> m "keypress state: %ld \
                           keycode %ld ty %ld" state keycode ty);
@@ -227,7 +229,7 @@ let window qubes_t ~width ~height : backend Lwt.t =
   let _pixels = height * width in (* TODO handle resizing instead *)
   let page_count = ((1300 * 1000 * (32/8)) |> Io_page.round_to_page_size)
                    / Io_page.page_size in
-  begin match OS_xen.Export.share_pages ~domid:0 ~count:page_count
+  begin match Os_xen.Xen.Export.share_pages ~domid:0 ~count:page_count
                 ~writable:false with
     | Error _ -> failwith ("what we can't share "^(string_of_int page_count)
                         ^" pages with dom0")
@@ -244,7 +246,7 @@ let window qubes_t ~width ~height : backend Lwt.t =
           io_page = mapping ;
           io_page_arr = Io_page.to_pages mapping |> Array.of_list ;
           touched_pages = Array.make page_count true ; (* send all first time *)
-          gntrefs = OS.Xen.Export.refs grant;
+          gntrefs = Os_xen.Xen.Export.refs grant;
           qubes = qubes_t;
           window;
         }
