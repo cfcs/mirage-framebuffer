@@ -64,7 +64,7 @@ opam pin add -n mirage-framebuffer-tsdl 'https://github.com/cfcs/mirage-framebuf
 # QubesOS backend:
 opam pin add -n mirage-framebuffer-qubes 'https://github.com/cfcs/mirage-framebuffer.git#master'
 ## Patches to mirage-qubes (upstreamed to master awaiting release):
-opam pin add -n mirage-qubes 'https://github.com/mirage/mirage-qubes'
+opam pin add -n mirage-qubes.0.7.0 'https://github.com/mirage/mirage-qubes'
 
 
 opam install imagelib-unix mirage-framebuffer{,-tsdl,-qubes,-notty,-imagelib}

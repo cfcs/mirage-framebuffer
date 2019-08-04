@@ -21,10 +21,10 @@ depends: [
   "lwt" {>= "4.1.0" }
   "mirage-framebuffer"
   "mirage-logs"
-  "mirage-qubes" { >= "0.7" }
+  "mirage-qubes" { >= "0.7.0" }
   "mirage-types-lwt" { >= "3.0.0" }
   "mirage-xen" { >= "4.0.1" }
   "vchan-xen" { >= "4.0.3" }
   "xen-evtchn" {>= "2.1.0" }
-  "ocaml"            { >= "4.04.2" }
+  "ocaml"            { >= "4.07.0" }
 ]

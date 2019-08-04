@@ -121,12 +121,13 @@ let mfndump t =
   Log.debug (fun f -> f "entering mfndump t");
   let mfn_of_iopage p =
     Io_page.get_addr p |> Os_xen.Xen.virt_to_mfn |> Nativeint.to_int32 in
-  Array.mapi (fun i -> function
-  | false -> None
-  | true -> Some (mfn_of_iopage t.io_page_arr.(i))
-    ) t.touched_pages |> Array.to_list
-  |> List.filter (function None -> false | _ -> true)
-  |> List.map (function Some x -> x | None -> failwith "TODO implement")
+  Array.to_seqi t.touched_pages
+  |> Seq.filter_map
+    (function
+      | _, false -> None
+      | i, true -> Some (mfn_of_iopage t.io_page_arr.(i))
+    )
+  |> List.of_seq
 
 let keysym_of_scancode code =
   Framebuffer__Keycodes.find_keysym
@@ -195,8 +196,12 @@ let rec recv_event (t:backend) : Framebuffer__S.backend_event Lwt.t =
   GUI.recv_event t.window >>= function
   | Button {x;y;_} ->
     Lwt.return (Mouse_button {x = Int32.to_int x ; y = Int32.to_int y})
-  | Configure _ ->
-    Logs.warn (fun m -> m "received CONFIGURE"); recv_event t
+  | Configure { x; y; width ; height ; override_redirect = _ } ->
+    let msg = Formats.GUI.make_msg_configure
+        ~window:(GUI.int32_of_window t.window) ~x ~y ~width ~height in
+    Log.warn (fun m -> m "received CONFIGURE, sending it right back:@.%a"
+                  Cstruct.hexdump_pp msg);
+    GUI.send t.qubes [msg] |> resolve_ret >>= fun () -> recv_event t
   | Keypress {state;keycode;ty; _} ->
     Log.info (fun m -> m "keypress state: %ld \
                           keycode %ld ty %ld" state keycode ty);
@@ -270,7 +275,6 @@ let resize ~width ~height t =
 
 let redraw t =
     let mfns = mfndump t in
-    Log.debug (fun f -> f "MFNS: %d" List.(length mfns)) ;
 
     let width = Int32.of_int t.width and height = Int32.of_int t.height in
     (* http://xenbits.xen.org/gitweb/?p=xen.git;a=blob;f=xen/include/xen/mm.h;h=88de3c1fa6bb64bde8867ec4b53a18844b099be4;hb=HEAD *)
