@@ -1,6 +1,4 @@
-#load "/home/user/.opam/4.04.2+fPIC/lib/io-page-unix/io_page_unix.cma";;
+#use "topfind";;
+#load "/home/user/.opam/4.07.1/lib/io-page-unix/io_page_unix.cma";;
 #require "io-page.unix";;
-#require "mirage-framebuffer-tsdl";;
-#require "lwt";;
-open Lwt.Infix;;
-
+(*#require "mirage-framebuffer-tsdl";;*)

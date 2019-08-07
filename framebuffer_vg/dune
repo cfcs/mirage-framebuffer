@@ -1,0 +1,7 @@
+(library
+ (name framebuffer_vg)
+ (public_name mirage-framebuffer-vg)
+ (libraries cstruct lwt mirage-types-lwt rresult mirage-logs logs
+   mirage-framebuffer vg)
+ (wrapped false)
+ (flags :standard -safe-string))

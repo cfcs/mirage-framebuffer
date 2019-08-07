@@ -1,0 +1,11 @@
+(executables
+ (names test_vg)
+ (libraries mirage-framebuffer-tsdl mirage-framebuffer
+   mirage-framebuffer-vg logs.fmt))
+
+(alias
+ (name runtest)
+ (deps
+  (:< test_vg.bc))
+ (action
+  (run %{<})))
