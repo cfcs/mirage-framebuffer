@@ -49,7 +49,10 @@ type backend =
   { no: window_id;
     event_mvar: Framebuffer__S.backend_event Lwt_mvar.t ;
     window : Sdl.window ;
+    mutable width : int ;
+    mutable height : int ;
     renderer : Sdl.renderer ;
+    mutable surface : (int32, Bigarray.int32_elt) Sdl.bigarray ;
   }
 type global_state_t =
   { mutable windows : (window_id * backend) list ; }
@@ -193,8 +196,16 @@ let window (() :init_handle) ~width ~height =
   let w, h = width, height in
   let window, renderer = Sdl.create_window_and_renderer ~w ~h
       Sdl.Window.(windowed + resizable) |> R.get_ok in
-  let backend = {window ; renderer; no = Sdl.get_window_id window;
-                 event_mvar = Lwt_mvar.create_empty () }
+  let backend =
+    match Sdl.get_window_surface window with
+    | Error _ -> failwith "get_window_surface"
+    | Ok surf ->
+    let width, height = Sdl.get_surface_size surf in
+    {window ; renderer; no = Sdl.get_window_id window;
+     event_mvar = Lwt_mvar.create_empty () ;
+     surface = Sdl.get_surface_pixels surf Bigarray.Int32 ;
+     width ; height;
+    }
   in
   assert (backend.no <> no_window);
   global_state.windows <- (backend.no, backend) :: global_state.windows ;
@@ -209,7 +220,14 @@ let resize ~width ~height t =
     | _ -> failwith "should not happen: Tsdl.Sdl.get_window_display" in
   ignore @@ Sdl.set_window_display_mode t.window
     {mode with dm_w = width ; dm_h = height } ;
-  Logs.debug (fun m -> m "resize: %d %d %a" width height
+  begin match (Sdl.get_window_surface t.window) with
+    | Ok surf -> let width, height = Sdl.get_surface_size surf in
+      t.width <- width ;
+      t.height <- height ;
+                  t.surface <- Sdl.get_surface_pixels surf Bigarray.Int32
+    | Error _ -> failwith "woops getting surface"
+  end ;
+  Logs.debug (fun m -> m "resize: %d %d %a" t.width t.height
                 Fmt.(pair int int) (Sdl.get_window_size t.window));
   Lwt.return_unit
 
@@ -253,7 +271,7 @@ struct
   let line (lst:color list) _backend : line =
     let w = List.length lst in
     let ba = Bigarray.Array1.create Bigarray.int32 Bigarray.C_layout w in
-    List.iteri (fun i (p:int32) -> Bigarray.Array1.set ba i p) lst;
+    List.iteri (fun i (p:int32) -> Bigarray.Array1.unsafe_set ba i p) lst;
     {w ; ba}
 
   let lineiter f i b = line (Array.init i f |> Array.to_list) b
@@ -287,11 +305,9 @@ let rect (b:backend) ~(x:int) ~(y:int) ~(x_end:int) ~(y_end:int) (c:color) =
 
 
 let pixel (b:backend) ~(x:int) ~(y:int) (c:color) : unit =
-  let wss = Sdl.get_window_surface b.window |> R.get_ok in
+
   (*Sdl.lock_surface wss |> R.get_ok;*)
-  let ba = (wss |> Sdl.get_surface_pixels) Bigarray.Int32 in
-  let w,_h = Sdl.get_surface_size wss in
-  ba.{y * (w) + x} <- c
+  b.surface.{y * (b.width) + x} <- c
   (*Sdl.unlock_surface wss;*)
 (*horizontal b ~x ~y ~x_end:(x+1) c*)
   (* Sdl.set_render_draw_color b.renderer r g b 0xFF;
