@@ -55,7 +55,7 @@ struct
       module Log : Logs.LOG = (val Logs.src_log (Logs.Src.create "framebuffer"
                                                    ~doc:"Mirage.Framebuffer"))
 
-      let compile_rgb ?r ?g ?b t = Backend.Compile.rgb ?r ?g ?b t.b
+      let [@inline always] compile_rgb ?r ?g ?b t = Backend.Compile.rgb ?r ?g ?b t.b
       let compile_line colors t = Backend.Compile.line colors t.b
 
       (* load bitmap font *)

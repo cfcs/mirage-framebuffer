@@ -254,7 +254,7 @@ let set_title (b:backend) title = Sdl.set_window_title b.window title
 
 module Compile =
 struct
-  let rgb ?(r='\x00') ?(g='\x00') ?(b='\x00') (_:backend) =
+  let [@inline always] rgb ?(r='\x00') ?(g='\x00') ?(b='\x00') (_:backend) =
     (*Sdl.Color.create ~r:(Char.code r) ~g:(Char.code g) ~b:(Char.code b)
       ~a:sdl_ALPHA_OPAQUE*)
     (*let open Int32 in -- for textures:
@@ -268,7 +268,7 @@ struct
     |> add (shift_left (of_int @@ int_of_char b) 0)
     |> add (shift_left sdl_ALPHA_OPAQUE 24)
 
-  let line (lst:color list) _backend : line =
+  let [@inline always] line (lst:color list) _backend : line =
     let w = List.length lst in
     let ba = Bigarray.Array1.create Bigarray.int32 Bigarray.C_layout w in
     List.iteri (fun i (p:int32) -> Bigarray.Array1.unsafe_set ba i p) lst;
