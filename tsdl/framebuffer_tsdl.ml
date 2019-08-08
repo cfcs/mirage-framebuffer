@@ -178,8 +178,11 @@ let event_loop () : unit Lwt.t =
 
 let redraw (b:backend) =
   (*Sdl.render_present b.renderer *)
-  Sdl.update_window_surface b.window |> R.get_ok
-  ; Lwt.return_unit
+  match Sdl.update_window_surface b.window with
+  | Ok () -> Lwt.return_unit
+  | Error `Msg x ->
+    Log.err (fun m -> m "Sdl.update_window_surface %s" x) ;
+    Lwt.return_unit
 
 let recv_event (b:backend) : Framebuffer__S.backend_event Lwt.t =
   Lwt_mvar.take b.event_mvar
