@@ -307,8 +307,8 @@ let rect (b:backend) ~(x:int) ~(y:int) ~(x_end:int) ~(y_end:int) (c:color) =
 let pixel (b:backend) ~(x:int) ~(y:int) (c:color) : unit =
 
   (*Sdl.lock_surface wss |> R.get_ok;*)
-  Bigarray.Array1.unsafe_set b.surface (y * (b.width) + x) c
-  (*b.surface.{y * (b.width) + x} <- c*)
+  (*Bigarray.Array1.unsafe_set b.surface (y * (b.width) + x) c*)
+  b.surface.{y * (b.width) + x} <- c
   (*Sdl.unlock_surface wss;*)
 (*horizontal b ~x ~y ~x_end:(x+1) c*)
   (* Sdl.set_render_draw_color b.renderer r g b 0xFF;
