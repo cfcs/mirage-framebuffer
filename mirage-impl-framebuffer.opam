@@ -6,7 +6,7 @@ bug-reports:  "https://github.com/cfcs/mirage-framebuffer/issues"
 dev-repo:     "git+https://github.com/cfcs/mirage-framebuffer.git"
 license:      "gopher://license.to.chill"
 tags: "org:mirage"
-synopsis: "mirage device implementation for mirage-framebuffer devices"
+synopsis: "Mirage device implementation for mirage-framebuffer devices"
 
 build: [
   [ "dune" "subst"] {pinned}
