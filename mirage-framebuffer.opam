@@ -6,6 +6,7 @@ bug-reports:  "https://github.com/cfcs/mirage-framebuffer/issues"
 dev-repo:     "git+https://github.com/cfcs/mirage-framebuffer.git"
 license:      "gopher://license.to.chill"
 tags: "org:mirage"
+synopsis:     "Portable framebuffer graphics library with various drawing APIs and backends"
 
 build: [
   [ "dune" "subst"] {pinned}

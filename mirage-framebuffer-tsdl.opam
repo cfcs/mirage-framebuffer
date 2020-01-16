@@ -6,7 +6,7 @@ bug-reports:  "https://github.com/mirage/mirage-framebuffer/issues"
 dev-repo:     "git+https://github.com/mirage/mirage-framebuffer.git"
 license:      "gopher://license.to.chill"
 tags: "org:mirage"
-
+synopsis: "SDL2 backend for mirage-framebuffer, using the `tsdl` bindings"
 build: [
   [ "dune" "subst"] {pinned}
   [ "dune" "build" "-p" name "-j" jobs ]
