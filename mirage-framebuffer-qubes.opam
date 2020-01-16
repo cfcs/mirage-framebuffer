@@ -22,7 +22,7 @@ depends: [
   "mirage-framebuffer"
   "mirage-logs"
   "mirage-qubes" { >= "0.7.0" }
-  "mirage-types-lwt" { >= "3.0.0" }
+  "mirage-types" { >= "3.5.2" }
   "mirage-xen" { >= "4.0.1" }
   "vchan-xen" { >= "4.0.3" }
   "xen-evtchn" {>= "2.1.0" }

@@ -22,7 +22,7 @@ depends: [
   "lwt" { >= "4.1.0" }
   "mirage-framebuffer"
   "mirage-logs"
-  "mirage-types-lwt" { >= "3.0.0" }
+  "mirage-types" { >= "3.5.2" }
   "mirage-unix" {>="3.0.0"}
   "rresult" {>= "0.5.0"}
   "tsdl" {>= "0.9.5"}

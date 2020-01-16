@@ -19,7 +19,7 @@ depends: [
   "logs"             { >= "0.6.2" }
   "lwt"              { >= "4.2.1" }
   "functoria"        { build }
-  "mirage-types-lwt" { >= "3.5.1" }
+  "mirage-types"     { >= "3.5.1" }
   "mirage-logs"      { >= "0.3.0" }
   "rresult"          { >= "0.5.0" }
   "ocaml"            { >= "4.04.2" }

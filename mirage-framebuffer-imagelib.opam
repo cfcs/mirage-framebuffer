@@ -22,7 +22,7 @@ depends: [
   "logs" { >= "0.5.0" }
   "lwt" {>= "4.2.1"}
   "mirage-framebuffer"
-  "mirage-types-lwt" { >= "3.0.0" }
+  "mirage-types"     { >= "3.5.0" }
   "rresult"
   "ocaml"            { >= "4.04.2" }
 ]

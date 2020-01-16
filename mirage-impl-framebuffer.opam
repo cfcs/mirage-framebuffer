@@ -15,7 +15,7 @@ build: [
 depends: [
   "dune"  {build & >= "1.0"}
   "mirage"
-  "mirage-types-lwt" { >= "3.0.0" }
+  "mirage-types" { >= "3.0.0" }
   "rresult"          { >= "0.5.0" }
   "ocaml"            { >= "4.04.2" }
 ]
