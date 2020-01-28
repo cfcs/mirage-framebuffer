@@ -68,8 +68,13 @@ sig
   val letters : t -> string -> x:int -> y:int -> unit
   val output_tty : t -> int * int -> string -> unit Lwt.t
   val pixel : t -> x:int -> y:int -> color -> unit
+  val line_bresenham : t -> x:int -> y:int -> x_end:int -> y_end:int -> color -> unit
   val rect : t -> x:int -> y:int -> x_end:int -> y_end:int -> color -> unit
   val rect_lineiter : t -> x:int -> y:int -> y_end:int -> (int -> line) -> unit
+
+
+  val dim : t -> int * int
+  (** [dim t] returns the (width,height) dimensions of the window. *)
 
   val term_size : t -> int * int
   (** [term_size t] returns the (width,height) dimensions currently available

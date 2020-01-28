@@ -105,6 +105,29 @@ struct
 
       let pixel t ~x ~y = Backend.pixel t.b ~x ~y
 
+      let line_bresenham t ~x ~y ~x_end ~y_end color =
+        let x1 = x_end and y1 = y_end in
+        let dx = abs (x1-x) in
+        let sx = if x < x1 then 1 else ~-1 in
+        let dy = ~-(abs(y1-y)) and sy = if y < y1 then 1 else ~-1 in
+        let _ = sx,sy in
+        let rec for_loop x ~err ~y ~d =
+          pixel t ~x ~y color ;
+          if x = x_end && y = y_end then ()
+          else begin
+            let e2 = 2 * err in
+            let err, x = if e2 >= dy
+              then err + dy, x + sx
+              else err, x in
+            let err, y = if e2 <= dx
+              then err + dx, y + sy
+              else err, y in
+            for_loop x ~err ~y ~d:(d+2*dy)
+          end
+        in
+        let err = dx+dy in
+        for_loop x ~err ~y ~d:(2*dy - dx)
+
       let rect t ~x ~y ~x_end ~y_end color =
         Backend.rect t.b ~x ~y ~x_end ~y_end color
 
@@ -134,6 +157,8 @@ struct
 
              letter t (int_of_char ch) ~x:x2 ~y:y2
           )
+
+      let dim t = t.width, t.height
 
       let term_size t = (t.width / font_w) , (t.height / font_h)
 
