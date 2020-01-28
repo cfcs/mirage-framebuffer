@@ -12,6 +12,9 @@ build: [
   [ "dune" "build" "-p" name "-j" jobs ]
 ]
 
+depext: [
+  "libsdl2"
+]
 depends: [
   "ocamlfind" {build}
   "dune"  {build & >= "1.0"}
