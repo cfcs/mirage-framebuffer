@@ -4,7 +4,7 @@ open Qubes
 type 'ok ret = 'ok Qubes.S.or_eof Lwt.t
 
 type t = {
-  gntrefs : Os_xen.Xen.Gntref.t list ; (* TODO seems unused? *)
+  gntrefs : OS.Xen.Gntref.t list ; (* TODO seems unused? *)
   io_page  : Io_page.t ; (* spans several pages, allows consecutive blitting *)
   io_page_arr : Io_page.t array ; (* point to each individual page in io_page *)
   touched_pages : bool array ; (* bitmap tracking which io_page_arr pages have
@@ -120,7 +120,7 @@ let mfndump t =
   (* TODO replace this mess, consider just making a (Io_page.t * true) array*)
   Log.debug (fun f -> f "entering mfndump t");
   let mfn_of_iopage p =
-    Io_page.get_addr p |> Os_xen.Xen.virt_to_mfn |> Nativeint.to_int32 in
+    Io_page.get_addr p |> OS.Xen.virt_to_mfn |> Nativeint.to_int32 in
   Array.to_seqi t.touched_pages
   |> Seq.filter_map
     (function
@@ -234,7 +234,7 @@ let window qubes_t ~width ~height : backend Lwt.t =
   let _pixels = height * width in (* TODO handle resizing instead *)
   let page_count = ((1300 * 1000 * (32/8)) |> Io_page.round_to_page_size)
                    / Io_page.page_size in
-  begin match Os_xen.Xen.Export.share_pages ~domid:0 ~count:page_count
+  begin match OS.Xen.Export.share_pages ~domid:0 ~count:page_count
                 ~writable:false with
     | Error _ -> failwith ("what we can't share "^(string_of_int page_count)
                         ^" pages with dom0")
@@ -245,13 +245,13 @@ let window qubes_t ~width ~height : backend Lwt.t =
        (resolve_ret @@ Qubes.GUI.create_window ~x:0l ~y:0l ~title:"my qubes title"
           ~width ~height qubes_t)
       ) >>= fun window ->
-      let mapping = Os_xen.Xen.Export.mapping grant in
+      let mapping = OS.Xen.Export.mapping grant in
       let t =
         { height; width;
           io_page = mapping ;
           io_page_arr = Io_page.to_pages mapping |> Array.of_list ;
           touched_pages = Array.make page_count true ; (* send all first time *)
-          gntrefs = Os_xen.Xen.Export.refs grant;
+          gntrefs = OS.Xen.Export.refs grant;
           qubes = qubes_t;
           window;
         }
