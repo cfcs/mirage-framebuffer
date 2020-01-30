@@ -7,14 +7,12 @@ dev-repo:     "git+https://github.com/mirage/mirage-framebuffer.git"
 license:      "gopher://license.to.chill"
 tags: "org:mirage"
 synopsis: "SDL2 backend for mirage-framebuffer, using the `tsdl` bindings"
+description: "on debian the libsdl2-dev package is required."
 build: [
   [ "dune" "subst"] {pinned}
   [ "dune" "build" "-p" name "-j" jobs ]
 ]
 
-depext: [
-  "libsdl2"
-]
 depends: [
   "ocamlfind" {build}
   "dune"  {build & >= "1.0"}
@@ -25,7 +23,6 @@ depends: [
   "lwt" { >= "4.1.0" }
   "mirage-framebuffer"
   "mirage-logs"
-  "mirage-types" { >= "3.5.2" }
   "mirage-unix" {>="3.0.0"}
   "rresult" {>= "0.5.0"}
   "tsdl" {>= "0.9.5"}

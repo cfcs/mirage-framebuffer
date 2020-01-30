@@ -2,5 +2,5 @@
  (name framebuffer)
  (public_name mirage-framebuffer)
  (wrapped false)
- (libraries cstruct lwt mirage-types rresult mirage-logs logs)
+ (libraries cstruct fmt lwt rresult mirage-logs logs)
 )

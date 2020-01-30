@@ -23,7 +23,6 @@ depends: [
   "lwt"                { >= "4.3.0" }
   "mirage-framebuffer"
   "mirage-logs"
-  "mirage-types"       { >= "3.5.0" }
   "notty"              { >= "0.2.1" & <"3.0.0"}
   "rresult"            { >= "0.5.0" }
   "ocaml"              { >= "4.04.2" }
