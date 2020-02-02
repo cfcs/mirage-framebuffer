@@ -67,11 +67,21 @@ module Make(FB:Framebuffer.S) = struct
   let run () =
       FB.window ~width:100 ~height:100 >>= fun fb ->
       Lwt.async (pp_events fb);
-      rainbow fb () >>=
+      (*rainbow fb () >>=*)
       (*draw_pixels fb >>= fun () ->
       draw_a_letter fb () >>=*)
+      let red = FB.compile_rgb ~r:'\xff' fb in
+      let _green = FB.compile_rgb ~g:'\xff' fb in
+      FB.line_bresenham_antialias fb
+        ~x:10 ~y:10 ~x_end:20 ~y_end:60 3 red ;
+      FB.line_bresenham_antialias fb
+        ~x:30 ~y:10 ~x_end:40 ~y_end:60 2 red ;
+      FB.line_bresenham_antialias fb
+        ~x:50 ~y:10 ~x_end:80 ~y_end:60 1 red ;
+
+      () |>
       draw_letters fb >>=
-      terminal >>=
+      (*terminal >>=*)
       finish fb
 
 end

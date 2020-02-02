@@ -103,16 +103,16 @@ struct
 
       let redraw t = Backend.redraw t.b
 
-      let pixel t ~x ~y = Backend.pixel t.b ~x ~y
+      let [@inline] pixel t ~x ~y = Backend.pixel t.b ~x ~y
 
-      let line_bresenham t ~x ~y ~x_end ~y_end color =
+      let line_bresenham ?(cb=pixel) t ~x ~y ~x_end ~y_end color =
         let x1 = x_end and y1 = y_end in
         let dx = abs (x1-x) in
         let sx = if x < x1 then 1 else ~-1 in
         let dy = ~-(abs(y1-y)) and sy = if y < y1 then 1 else ~-1 in
         let _ = sx,sy in
         let rec for_loop x ~err ~y ~d =
-          pixel t ~x ~y color ;
+          cb t ~x ~y color ;
           if x = x_end && y = y_end then ()
           else begin
             let e2 = 2 * err in
@@ -127,6 +127,77 @@ struct
         in
         let err = dx+dy in
         for_loop x ~err ~y ~d:(2*dy - dx)
+
+      let line_bresenham_antialias t ~x ~y ~x_end ~y_end width _color =
+        (* adapted from C-code at
+           http://members.chello.at/~easyfilter/bresenham.html *)
+        assert (width > 0);
+        let x1 = x_end and y1 = y_end in
+        let dx = abs (x1-x)
+        and sx = if x < x1 then 1 else ~-1 in
+
+        let dy = abs (y1-y)
+        and sy = if y < y1 then 1 else ~-1 in
+
+        let ed : float = if dx+dy = 0 then 1. else
+            let dx' = float dx and dy' = float dy in
+            sqrt @@ dx' *. dx' +. (dy' *. dy')
+        in
+        let wd = ((float width +. 1.) /. 2.) in
+
+        let exception Break in
+        let err = ref (dx-dy) in
+        let e2 = ref 0 and x2 = ref 0 and y2 = ref 0 in
+        let y0 = ref y and x0 = ref x in
+
+        let [@inline]plot_pixel x y =
+          let r = 255 - max 0 (
+              (int_of_float (255. *. (
+                   ( (float @@ abs !e2) /. ed) -. wd +. 1.)))) in
+          let color =
+            Backend.Compile.rgb ~r:(char_of_int r) t.b in
+          pixel t ~x ~y color ;
+        in
+
+        try
+          while true do
+            pixel t ~x:!x0 ~y:!y0
+              (t.b |> Backend.Compile.rgb ~r:(
+                  char_of_int @@ 255 - (
+                      max 0 @@ 255 *
+                               (int_of_float (
+                                   (float @@ abs (!err-dx+dy)) /. ed
+                                   -. wd +. 1.))
+                    ))) ;
+            e2 := !err ; x2 := !x0 ;
+
+            if 2 * !e2 >= ~-dx then begin
+              (* handle x-axis progression*)
+              e2 := !e2 + dy ;
+              y2 := !y0 ;
+              while float !e2 < ed *. wd
+                    && (y1 <> !y2 || dx > dy) do
+                y2 := !y2 + sy ;
+                plot_pixel !x0 !y2 ;
+                e2 := !e2 + dx ; (* loop terminator*)
+              done ;
+              if !x0 = x1 then raise_notrace Break ;
+              e2 := !err ; err := !err - dy ; x0 := !x0 + sx ;
+            end ;
+
+            if 2 * !e2 <= dy then begin
+              (* handle y-axis progression *)
+              e2 := dx - !e2 ;
+              while float !e2 < ed *. wd && (x1 <> !x2 || dx < dy) do
+                x2 := !x2 + sx ;
+                plot_pixel !x2 !y0 ;
+                e2 := !e2 + dy ;
+              done ;
+              if !y0 = y1 then raise_notrace Break ;
+              err := dx ; y0 := !y0 + sy;
+            end
+          done
+        with Break -> ()
 
       let rect t ~x ~y ~x_end ~y_end color =
         Backend.rect t.b ~x ~y ~x_end ~y_end color

@@ -4,13 +4,15 @@ module Make(FB:Framebuffer.S) = struct
   let pp_events fb () =
     let rec loop () =
       FB.recv_event fb >>= fun ev ->
-      Logs.app (fun m -> m "%a" Framebuffer.pp_backend_event ev) ;
-      let open Framebuffer__Keycodes in
+      (*Logs.app (fun m -> m "%a" Framebuffer.pp_backend_event ev) ;*)
       begin match ev with
         | Keypress {pressed ; scancode; mask; keysym; mods} ->
           begin match keysym, mods with
             | None, _ -> ()
             | Some ks, kmods ->
+              let _ = Framebuffer__Keycodes.pp_keysym,
+                      ks, kmods, pressed, scancode, mask in
+              (*
               Logs.app
                 (fun m -> m "parsed keysym: @[down=%b; scancode: %d; mask: %d;\
                              @ sym: %a; mods: %a; char: %a@]"
@@ -20,6 +22,8 @@ module Make(FB:Framebuffer.S) = struct
                     Fmt.(list ~sep:(unit ", ") char)
                     (US_keyboard.to_unicode kmods ks |> List.map Uchar.to_char)
                 )
+*)
+              ()
           end
         | _ -> ()
       end ;
@@ -31,16 +35,38 @@ module Make(FB:Framebuffer.S) = struct
     let open Vg in
     let module VG = Framebuffer_vg.Vgr_mirage_framebuffer(FB) in
     let r = Vgr.create (VG.target ~window ()) (`Buffer (Buffer.create 0)) in
-    let size = Size2.v 100. 30. in
+    let size = Size2.v 120. 50. in
     let view = Box2.unit in
-    let circle =
-      P.empty
-      |> P.rect @@ Gg.Box2.of_pts (P2.v 0.2 0.6) (P2.v 0.3 0.5) in
     let red = I.const Color.red in
-    let red_box = I.cut circle red in
-    ignore (Vgr.render r (`Image (size, view, red_box)));
+    let box =
+      P.empty
+      |> P.rect @@ Gg.Box2.of_pts (P2.v 5.0 10.0) (P2.v 30.0 25.) in
+    let red_box = I.cut box red in
+    let circle = P.empty |> P.circle (P2.v 50. 15.) 7. in
+    let red_circle = I.cut circle red_box in
+    let _ = red_circle in
+    let triangle =
+      let v1 = P2.v 80. 40. in
+      let v2 = P2.v 100. 10. in
+      let v3 = P2.v 120. 40. in
+      P.empty |> P.sub v1 |> P.line v2 |> P.line v3 |> P.close  in
+    let blue_triangle = I.cut triangle (I.const Color.blue) in
+
+    let five =
+      let v1 = P2.v 35. 40. in
+      let v2 = P2.v 45. 10. in
+      let v3 = P2.v 55. 20. in
+      let v4 = P2.v 65. 10. in
+      let v5 = P2.v 75. 25. in
+      let v6 = P2.v 65. 35. in
+      P.empty |> P.sub v1 |> P.line v2 |> P.line v3 |> P.line v4
+      |> P.line v5 |> P.line v6 |> P.close  in
+    let green_five = I.cut five (I.const Color.green) in
+
+    let product = I.blend red_circle blue_triangle |> I.blend green_five in
+    ignore (Vgr.render r (`Image (size, view, product)));
     ignore (Vgr.render r `End) ;
-    Lwt.return ()
+    FB.redraw window
 
   let rec finish fb () =
     FB.recv_event fb >>= function
@@ -48,7 +74,7 @@ module Make(FB:Framebuffer.S) = struct
     | _ -> finish fb ()
 
   let run () =
-      FB.window ~width:100 ~height:100 >>= fun fb ->
+      FB.window ~width:200 ~height:200 >>= fun fb ->
       Lwt.async (pp_events fb);
       vg_stuff fb >>=
       finish fb

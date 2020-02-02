@@ -68,7 +68,9 @@ sig
   val letters : t -> string -> x:int -> y:int -> unit
   val output_tty : t -> int * int -> string -> unit Lwt.t
   val pixel : t -> x:int -> y:int -> color -> unit
-  val line_bresenham : t -> x:int -> y:int -> x_end:int -> y_end:int -> color -> unit
+  val line_bresenham : ?cb:(t -> x:int -> y:int -> color -> unit) ->
+    t -> x:int -> y:int -> x_end:int -> y_end:int -> color -> unit
+  val line_bresenham_antialias : t -> x:int -> y:int -> x_end:int -> y_end:int -> int -> color -> unit
   val rect : t -> x:int -> y:int -> x_end:int -> y_end:int -> color -> unit
   val rect_lineiter : t -> x:int -> y:int -> y_end:int -> (int -> line) -> unit
 

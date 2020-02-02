@@ -33,7 +33,7 @@ They define functors to be applied with a framebuffer module, for example `image
 
 - `mirage-framebuffer-notty`: Helper library defining `Framebuffer_notty` for use with [David Kaloper](https://github.com/pqwy)'s [notty](https://github.com/pqwy/notty), a declarative (text-based) terminal library.
 
-I hope that there will one day be a helper library for Daniel Bünzli's [vg library](http://erratique.ch/software/vg) for declarative 2D graphics, but there is no active development on this.
+I hope that there will one day be a helper library for Daniel Bünzli's [vg library](http://erratique.ch/software/vg) for declarative 2D graphics, but there is ~no active development on this~ not full support yet.
 
 ### Using the library
 
@@ -66,8 +66,10 @@ opam pin add -n mirage-framebuffer-qubes 'https://github.com/cfcs/mirage-framebu
 ## Patches to mirage-qubes (upstreamed to master awaiting release):
 opam pin add -n mirage-qubes.0.7.0 'https://github.com/mirage/mirage-qubes'
 
+# VG vector graphics library helper:
+opam pin add -n mirage-framebuffer-vg 'https://github.com/cfcs/mirage-framebuffer.git#master'
 
-opam install imagelib-unix mirage-framebuffer{,-tsdl,-qubes,-notty,-imagelib}
+opam install imagelib-unix mirage-framebuffer{,-tsdl,-qubes,-notty,-imagelib,-vg}
 ```
 
 ### Sample TSDL backend
@@ -75,6 +77,12 @@ opam install imagelib-unix mirage-framebuffer{,-tsdl,-qubes,-notty,-imagelib}
 ```bash
 make test
 ./_build/default/test_tsdl/test_tsdl.exe
+```
+
+### Sample VG renderer:
+
+```bash
+dune build test_vg -f
 ```
 
 ### Projects using mirage-framebuffer:
