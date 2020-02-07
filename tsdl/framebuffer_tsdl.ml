@@ -89,7 +89,6 @@ let event_loop () : unit Lwt.t =
     | false -> Error `Poll
     | true ->
       let ev_type = Sdl.Event.(get ev typ) in
-      Log.debug (fun m -> m "got an event");
       begin match Sdl.Event.enum ev_type with
         | `Clipboard_update -> (* TODO handle ctrl-c also *)
           begin match Sdl.get_clipboard_text () with
@@ -97,6 +96,7 @@ let event_loop () : unit Lwt.t =
               Log.err (fun m -> m "Sdl.get_clipboard_text: %s" err);
               Error (`Msg err)
             | Ok str ->
+               Log.debug (fun m -> m "tsdl: got a clipboard event");
               (* TODO get currently focused window *)
               Ok (List.length global_state.windows, Clipboard_paste str)
           end
@@ -140,7 +140,8 @@ let event_loop () : unit Lwt.t =
           begin match window_event_enum w_ev with
             | `Close -> Ok (w_id, Window_close)
             | `Size_changed (* TODO see http://sdl.5483.n7.nabble.com/resize-td35916.html *)
-            | `Resized ->
+              | `Resized ->
+               Log.warn (fun m -> m "tsdl: window size changed, not implemented");
               (* TODO should invalidate window surface and redraw, unlike
                  the Qubes target where a resize just means the painted view
                  size changed, and that the application may want to re-scale.*)

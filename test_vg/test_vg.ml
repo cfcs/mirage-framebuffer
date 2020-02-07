@@ -34,23 +34,51 @@ module Make(FB:Framebuffer.S) = struct
     let open Gg in
     let open Vg in
     let module VG = Framebuffer_vg.Vgr_mirage_framebuffer(FB) in
-    let r = Vgr.create (VG.target ~window ()) (`Buffer (Buffer.create 0)) in
-    let size = Size2.v 120. 50. in
+    let r = Vgr.create (VG.target ~window ()) (`Buffer (Buffer.create 32)) in
+    let size = Size2.v 500. 500. in
     let view = Box2.unit in
     let red = I.const Color.red in
     let box =
       P.empty
-      |> P.rect @@ Gg.Box2.of_pts (P2.v 5.0 10.0) (P2.v 30.0 25.) in
+      |> P.rect @@ Gg.Box2.of_pts (P2.v 5.0 20.0) (P2.v 10.0 10.) in
+    let _ = box in let box = P.empty in
     let red_box = I.cut box red in
-    let circle = P.empty |> P.circle (P2.v 50. 15.) 7. in
-    let red_circle = I.cut circle red_box in
-    let _ = red_circle in
+    (*let circle = P.empty |> P.sub (P2.v 100. 40.)
+                 |> P.circle (P2.v 90. 35.) 20.
+                 |> P.line (P2.v 90. 30.)
+                 |> P.line (P2.v 40. 40.)
+                 |> P.close in*)
+    (*let _, circle = circle,
+                    P.sub P2.(v 70. 40.) P.empty
+                    |> P.earc (P2.v 80. 30.) (P2.v 10. 10.)
+                    (*|> P.line (P2.v 90. 40.)*)
+                    (*|> P.earc (P2.v 10. 20.) (P2.v 50. 20.)*)
+                    |> P.line (P2.v 90. 20.)
+                    |> P.close
+      in*)
+    let circle =
+      P.empty
+      |> P.sub (P2.v 90. 35.)
+      (*|> P.qcurve (P2.v 4. 18.) (P2.v 18. 18.)*)
+      |> P.circle (P2.v 90. 35.) 5.
+      |> P.sub (P2.v 120. 120.)
+      |> P.close
+    in
+    let white_circle = I.cut circle (I.const Color.white) in
     let triangle =
       let v1 = P2.v 80. 40. in
       let v2 = P2.v 100. 10. in
       let v3 = P2.v 120. 40. in
       P.empty |> P.sub v1 |> P.line v2 |> P.line v3 |> P.close  in
     let blue_triangle = I.cut triangle (I.const Color.blue) in
+    let _ = blue_triangle in
+    let blue_triangle = I.cut P.empty (I.const Color.blue) in
+    let _, blue_triangle =
+      blue_triangle,
+      (*(P.empty |> P.rrect (Gg.Box2.of_pts (P2.v 5.0 20.0) (P2.v 30. 10.))
+        (P2.v 5.0 5.0) |> I.cut) (I.const Color.blue)*)
+      I.cut P.empty (I.const Color.blue)
+    in
 
     let five =
       let v1 = P2.v 35. 40. in
@@ -62,8 +90,13 @@ module Make(FB:Framebuffer.S) = struct
       P.empty |> P.sub v1 |> P.line v2 |> P.line v3 |> P.line v4
       |> P.line v5 |> P.line v6 |> P.close  in
     let green_five = I.cut five (I.const Color.green) in
+    let _ = green_five in
+    let green_five = I.cut P.empty (I.const Color.green) in
 
-    let product = I.blend red_circle blue_triangle |> I.blend green_five in
+    let product = I.blend red_box blue_triangle
+                  |> I.blend green_five
+                  |> I.blend white_circle
+    in
     ignore (Vgr.render r (`Image (size, view, product)));
     ignore (Vgr.render r `End) ;
     FB.redraw window
@@ -74,7 +107,7 @@ module Make(FB:Framebuffer.S) = struct
     | _ -> finish fb ()
 
   let run () =
-      FB.window ~width:200 ~height:200 >>= fun fb ->
+      FB.window ~width:500 ~height:500 >>= fun fb ->
       Lwt.async (pp_events fb);
       vg_stuff fb >>=
       finish fb
