@@ -296,7 +296,7 @@ let rect_lineiter (b:backend) ~x ~y ~y_end f =
   done
 
 let horizontal (b:backend) ~(x:int) ~(y:int) ~(x_end:int) (c:color) =
-  draw_line b ~x ~y (Compile.lineiter (fun _ -> c) (max (x_end-x) 0) b)
+  draw_line b ~x ~y (Compile.lineiter (fun _ -> c) (max (x_end-x+1) 0) b)
 
 let rect (b:backend) ~(x:int) ~(y:int) ~(x_end:int) ~(y_end:int) (c:color) =
   for y = max y 0 to y_end do (* TODO bounds checking *)
