@@ -13,7 +13,7 @@ Contributions in the form of code, comments, ideas, research, or bug reports are
 
 Currently two backends are supported:
 
-- `mirage-framebuffer-tsdl`: A backend using [Daniel Bünzli](https://github.com/dbuenzli)'s [tsdl library](http://erratique.ch/software/tsdl) that exposes bindings to [libSDL](https://www.libsdl.org)
+- `mirage-framebuffer-tsdl`: A backend using [Daniel Bünzli](https://github.com/dbuenzli)'s [tsdl library](http://erratique.ch/software/tsdl) that exposes bindings to [libSDL](https://www.libsdl.org) (debian pkg `libsdl-2.0-0`)
 
 - `mirage-framebuffer-qubes`: A backend that builds on [Thomas Leonard](https://github.com/talex5)'s [mirage-qubes library](https://github.com/talex5/mirage-qubes) to implement the [QubesOS-GUId](https://www.qubes-os.org/doc/gui/) protocol for graphics from inside a MirageOS unikernel running as a QubesOS AppVM.
 
