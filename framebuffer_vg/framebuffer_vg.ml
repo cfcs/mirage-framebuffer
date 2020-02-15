@@ -22,27 +22,40 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
         let compare : int -> int -> int = compare end)
     type t = {
       intmap: int list IntMap.t;
-      lines: (int*int*int) list;
     }
-    let empty = { intmap = IntMap.empty; lines = []; }
+    let empty = { intmap = IntMap.empty; }
     let pp ppf t =
-      Fmt.pf ppf "intmap (empty when healthy):@. @[<v>%a@]@.lines: @[<v>%a@]"
+      Fmt.pf ppf "intmap :@. @[<v>%a@]"
         Fmt.(seq ~sep:(unit"@,")(pair ~sep:(unit" -> ") int
                                    (list ~sep:(unit",") int)))
         (IntMap.to_seq t.intmap
          |> Seq.map (fun (y,set) ->
              y, set))
-        Fmt.(list ~sep:(unit "@,") @@ (fun ppf -> fun (a,b,c) ->
-          Fmt.pf ppf "%d,%d,%d" a b c)) t.lines
     let add_point ~x ~y t =
       match IntMap.find_opt y t.intmap with
       | None ->
         let intmap = IntMap.add y [x] t.intmap in
-        {t with intmap}
+        { intmap }
       (*| Some oldest when oldest = x -> t (* ignore duplicates *)*)
       | Some oldest ->
         let intmap = IntMap.add y (x::oldest) t.intmap in
-        { lines = [] ; intmap}
+        { intmap }
+    let union t1 t2 =
+      (* union of all the dots contained in [t1] and [t2] *)
+      { intmap = IntMap.merge (fun _y lst_a lst_b ->
+            match lst_a, lst_b with
+            | None, None -> Some []
+            | Some one, None | None, Some one -> Some one
+            | Some lst_a, Some lst_b -> Some (lst_a @ lst_b)
+          ) t1.intmap t2.intmap }
+    let remove_gaps t =
+      (* makes the path [t] solid by removing all but the two outer points *)
+      IntMap.fold (fun y lst b ->
+          let sorted = List.sort compare lst in
+          add_point ~x:(List.hd sorted) ~y b
+          |> add_point ~x:(List.hd (List.rev sorted)) ~y
+        ) t.intmap empty
+
     let render_fill t fb_t color =
       IntMap.iter (fun y xs ->
           let xs = List.sort compare xs in
@@ -161,7 +174,7 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
             t *. t *. t *. y p3 in
     x, y
 
-  let plotEllipseRect ~stop ~clockwise ~large path x0 y0 x1 y1 =
+  let plotEllipseRect ~stop ~clockwise ~large old_path x0 y0 x1 y1 =
     let stop_x : int = int_of_float @@ Gg.P2.x stop in
     let stop_y : int = int_of_float @@ Gg.P2.y stop in
     let add_point_maybe path x y =
@@ -200,7 +213,7 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     a := 8 * !a * !a ;
     b1 := 8*b*b ;
 
-    let p = ref path in
+    let p = ref Path.empty in
 
     let rec until_loop () =
       (* simulates listing 6's do..while x0 <= x1*)
@@ -245,17 +258,9 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
       p := add_point_maybe !p (!x1+1) (!y1);
       decr y1 ; (* y1-- above *)
     done ;
-    let cleanup_inside p =
-      Path.IntMap.fold (fun y lst b ->
-          let sorted = List.sort compare lst in
-          Path.add_point ~x:(List.hd sorted) ~y b
-        |> Path.add_point ~x:(List.hd (List.rev sorted)) ~y
-        ) p.Path.intmap Path.empty
-    in
-    cleanup_inside !p
+    Path.union (old_path) (Path.remove_gaps !p)
 
-  let rec plotQuadRationalBezierSeg path p0 p1 p2 (w:float) window : Path.t =
-    let path = ref path in
+  let rec plotQuadRationalBezierSeg orig_path p0 p1 p2 (w:float) window : Path.t =
     let x0, y0 =
       int_of_float @@ P2.x p0,
       int_of_float @@ P2.y p0 in
@@ -293,7 +298,8 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     let dx = ref dx in
     let err = ref 0. in
     Logs.debug (fun m -> m "if !cur:%f <> 0. && w:%f > 0.0 then begin"
-               !cur w);
+                   !cur w);
+    let path = ref Path.empty in
     if !cur <> 0. && w > 0.0 then begin
       Logs.debug (fun m -> m "if !cur <> 0. && w > 0.0 then begin");
       if ((float !sx) *. (float !sx)
@@ -338,9 +344,9 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
         (* line 31: *)
         path :=
           (let p'x = P2.v !x0 !y0
-          and p'd = P2.v !dx !dy
-          and p's = P2.v (float !sx) (float !sy) in
-          plotQuadRationalBezierSeg !path p'x p'd p's !cur window) ; (* TODO *)
+           and p'd = P2.v !dx !dy
+           and p's = P2.v (float !sx) (float !sy) in
+           plotQuadRationalBezierSeg !path p'x p'd p's !cur window) ; (* TODO *)
         dx := floor @@ (w *. (float !x1) +. !x2) *. !xy +. 0.5 ;
         dy := floor @@ (w *. (float !y1) +. !y2) *. !xy +. 0.5 ;
         let p'd = P2.v !dx !dy in
@@ -380,7 +386,8 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     end ;
     let p0' = P2.v !x0 !y0 in
     let p2' = P2.v !x2 !y2 in
-    Path.add_line p0' p2' !path window
+    Path.remove_gaps (Path.add_line p0' p2' !path window)
+    |> Path.union orig_path
 
   let plotRotatedEllipseRect ~stop ~clockwise ~large path x0 y0 x1 y1 zd window : Path.t =
     (* freely after program listing 13, Bresenham.pdf *)
@@ -411,12 +418,12 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
           (P2.v (float x1) (float (y1 - yd)))
           (P2.v (float x1) (float y1))
           (P2.v (float @@ x1 - xd) (float y1))
-          (1.0-. w) window ;
+          (1.0-. w) window ;(*
       path := plotQuadRationalBezierSeg !path
           (P2.v (float x1) (float @@ y1-yd))
           (P2.v (float x1) (float y0))
           (P2.v (float (x0+xd)) (float y0))
-          w window ;
+          w window ;*)
       !path
 
   let plotQuadBezierSeg p0 p1 p2 path fb_t =
@@ -504,9 +511,9 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     Path.add_line (P2.v !x0 !y0) (P2.v !x2 !y2) !path fb_t
 
 
-  let plotQuadBezier p0 p1 p2 path fb_t =
+  let plotQuadBezier p0 p1 p2 orig_path fb_t =
     (* plot any quadratic Bezier curve *)
-    let path = ref path in
+    let path = ref Path.empty in
     let x0, y0 = ref@@ P2.x p0, ref@@ P2.y p0 in
     let x1, y1 = ref@@ P2.x p1, ref@@ P2.y p1 in
     let x2, y2 = ref@@ P2.x p2, ref@@ P2.y p2 in
@@ -581,7 +588,11 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
       (* P0 = P6, P1 = P7 *)
     end ;
     (* remaining part: *)
-    plotQuadBezierSeg (P2.v !x0 !y0) (P2.v !x1 !y1) (P2.v !x2 !y2) !path fb_t
+    path := plotQuadBezierSeg
+        (P2.v !x0 !y0) (P2.v !x1 !y1) (P2.v !x2 !y2) !path fb_t ;
+    (* TODO removing gaps is not good if the curve crosses itself,
+       is that something we need to handle here? *)
+    Path.union orig_path (Path.remove_gaps !path)
 
   let plotRotatedEllipse ~stop ~clockwise ~large path xy
       radii angle fb_t : Path.t =
@@ -607,12 +618,301 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
       (i@@ x+.a) (i@@ y+.b)
       (4. *. zd *. cos angle) fb_t
 
+  let plotCubicBezierSeg p0 p1 p2 p3 path fb_t =
+    (* plot limited cubic Bezier segment *)
+    let (x0, y0) : float ref * float ref = ref@@P2.x p0, ref@@P2.y p0 in
+    let (x1, y1) : float ref * float ref = ref@@P2.x p1, ref@@P2.y p1 in
+    let (x2, y2) : float ref * float ref = ref@@P2.x p2, ref@@P2.y p2 in
+    let (x3, y3) : float ref * float ref = ref@@P2.x p3, ref@@P2.y p3 in
+    let path = ref path in
+    let f = ref 0. and fx = ref 0. and fy = ref 0. and leg = ref 1 in
+
+    (* step direction: *)
+    let sx = ref @@ if x0 < x3 then 1. else -1.
+    and sy = ref @@ if y0 < y3 then 1. else -1. in
+
+    let ( * ) = ( *. )
+    and ( / ) = ( /. )
+    and ( + ) = ( +. )
+    and ( - ) = ( -. ) in
+
+    let xc : float = ~-. (Stdlib.Float.abs (!x0+. !x1-. !x2 -. !x3)) in
+    let xa : float = xc -4.* !sx*(!x1- !x2)
+    and xb : float ref = ref @@ !sx*(!x0- !x1- !x2+ !x3)
+    and yc : float = ~-. (Stdlib.Float.abs(!y0 + !y1- !y2- !y3)) in
+    let ya = yc -4.* !sy *(!y1- !y2)
+    and yb : float ref = ref @@ !sy*(!y0- !y1- !y2+ !y3) in
+    let ab = ref 0.0
+    and ac = ref 0.0 and bc = ref 0.0
+    and cb = ref 0.0 and xx = ref 0.0
+    and xy = ref 0.0 and yy = ref 0.0
+    and dx = ref 0.0 and dy = ref 0.0
+    and ex = ref 0.0
+    and pxy : float ref ref = ref (ref 0.0)
+    and ep = ref 0.01
+    in
+
+    (* check for curve restrains *)
+    (* slope P0-P1 == P2-P3 and (P0-P3 == P1-P2 or no slope change) *)
+    assert(( !x1- !x0)*( !x2- !x3) < !ep
+           && ((!x3- !x0)*( !x1- !x2) < !ep || !xb* !xb < xa*xc+ !ep));
+    assert((!y1- !y0)*(!y2- !y3) < !ep
+           && ((!y3- !y0)*(!y1- !y2) < !ep ||  !yb* !yb < ya*yc+ !ep));
+    if (xa = 0. && ya = 0.) then begin
+      (* quadratic Bezier *)
+      sx := floor((3.*. !x1-. !x0+.1.)/.2.);
+      sy := floor((3.*. !y1-. !y0+.1.)/.2.);
+      (* new midpoint *)
+      path := plotQuadBezierSeg
+          (P2.v !x0 !y0)
+          (P2.v !sx !sy)
+          (P2.v !x3 !y3) !path fb_t ;
+    end ;
+    x1 := ( !x1 -. !x0)*.( !x1-. !x0)+.(!y1-. !y0)*.(!y1-. !y0)+.1.;
+    (* line lengths *)
+    x2 := ( !x2 -. !x3)*.( !x2-. !x3)+.(!y2-. !y3)*.(!y2-. !y3)+.1.;
+    let rec do_while1 () =
+      let exception Goto_Exit in
+      (* loop over both ends *)
+      ab := xa*. !yb-. !xb*. ya;
+      ac := xa*. yc-. xc*. ya;
+      bc := !xb*. yc-. xc*. !yb;
+      ex := !ab*.(!ab+. !ac-. 3. *. !bc)+. !ac*. !ac;
+      (* P0 part of self-intersection loop? *)
+
+      f := if !ex > 0. then 1. else sqrt(1.+.1024./. !x1);
+      (* calculate resolution *)
+
+      ab := !ab *. !f ;
+      ac := !ac *. !f ;
+      bc := !bc *. !f ;
+      ex := !ex *. (!f  *. !f); (* increase resolution *)
+
+      xy := 9.*.(!ab+. !ac+. !bc)/.8.;
+      cb := 8.*.(xa-. ya);(* init differences of 1st degree *)
+      dx := 27.*.(8.*. !ab*.(!yb*. !yb-. ya*. yc)+.
+                  !ex*.(ya+. 2.*. !yb+. yc))/.64.
+            -. ya *. ya*.(!xy-. ya);
+      dy := 27.*.(8.*. !ab*.(!xb*. !xb-. xa*. xc)
+                  -. !ex*.(xa+. 2. *. !xb+. xc)
+                 )/. 64.-. xa*. xa*. (!xy+. xa);
+      (* init differences of 2nd degree *)
+      xx := 3.*(3.* !ab*(3.* !yb* !yb-ya*ya-2.*ya*yc)
+                -ya*(3.* !ac*(ya+ !yb)+ya* !cb))/4.;
+      yy := 3.*(3.* !ab*(3.* !xb* !xb-xa*xa-2.*xa*xc)
+                -xa*(3.* !ac*(xa+ !xb)+xa* !cb))/4.;
+      xy := xa*ya*(6.* !ab+6.* !ac-3.* !bc+ !cb);
+      ac := ya*ya;
+      cb := xa*xa;
+      xy := 3.*(!xy+9.* !f*(!cb* !yb*yc- !xb*xc* !ac)
+                -18.* !xb* !yb* !ab)/8.;
+
+      if (!ex < 0.) then begin
+        (* negate values if inside self-intersection loop *)
+        dx := ~-. !dx;
+        dy := ~-. !dy;
+        xx := ~-. !xx;
+        yy := ~-. !yy;
+        xy := ~-. !xy;
+        ac := ~-. !ac;
+        cb := ~-. !cb;
+      end ;
+      (* init differences of 3rd degree *)
+      ab := 6. *ya* !ac;
+      ac := -6.*xa* !ac;
+      bc := 6.*ya* !cb;
+      cb := -6.*xa* !cb;
+      dx := !dx + !xy;
+      ex := !dx + !dy;
+      dy := !dy + !xy;
+      (* error of 1st step *)
+      pxy := xy ;
+      fy := !f ;
+      fx := !fy ;
+      let rec for_loop1 () =
+        if x0 <> x3 && !y0 <> !y3 then raise_notrace Goto_Exit ;
+        path := Path.add_point ~x:(int_of_float !x0)
+            ~y:(int_of_float !y0) !path ;
+        (* plot curve *)
+        let rec do_while2 () =
+          (* move sub-steps of one pixel *)
+          if ( !dx > ! !pxy || !dy < ! !pxy) then
+            raise_notrace Goto_Exit;
+          (* confusing values *)
+          y1 := 2.* !ex- !dy;
+          (* save value for test of y step *)
+          if (2.* !ex >=  !dx)  then begin
+            (* x sub-step *)
+            fx := !fx - 1.;
+            dx := !dx + !xx ;
+            ex := !ex + !dx;
+            xy := !xy + !ac;
+            dy := !dy + !xy;
+            yy := !yy + !bc;
+            xx := !xx + !ab;
+          end ;
+          if (!y1 <= 0.)  then begin
+            (* y sub-step *)
+            fy := !fy - 1.;
+            dy := !dy + !yy;
+            ex := !ex + !dy ;
+            xy := !xy + !bc;
+            dx := !dx + !xy;
+            xx := !xx + !ac;
+            yy := !yy + !cb;
+          end ;
+          if (!fx > 0. && !fy > 0.) then do_while2 () else ()
+        in do_while2 () ;
+        (* pixel complete? *)
+        if (2.*. !fx <= !f) then begin
+          x0 := !x0 + !sx;
+          fx := !fx + !f;
+        end ;
+        (* x step *)
+        if (2.* !fy <= !f) then begin
+          y0 := !y0 + !sy;
+          fy := !fy + !f;
+        end ;
+        (* y step *)
+        if (!pxy == xy &&  !dx < 0. &&  !dy > 0.)
+        then pxy := ep;(* pixel ahead valid *)
+        for_loop1 ()
+      in (try for_loop1 () with
+            Goto_Exit -> ()); (* goto: exit label*)
+      (* exit: *)
+      xx := !x0; x0 := !x3;
+      x3 := !xx;
+      sx := ~-. !sx;
+      xb := ~-. !xb;
+      (* swap legs *)
+      yy := !y0;
+      y0 := !y3;
+      y3 := !yy;
+      sy := ~-. !sy;
+      yb := ~-. !yb;
+      x1 := !x2;
+
+      (* TODO ported from: while(leg--) *)
+      decr leg ;
+      if !leg >= 0 then do_while1 () else ()
+    in do_while1 ();
+    (* try other end *)
+    Path.add_line (P2.v !x0 !y0) (P2.v !x3 !y3) !path fb_t
+
+  let plotCubicBezier p0 p1 p2 p3 (path:Path.t) fb_t =
+    (* plot any cubic Bezier curve *)
+    let x0,y0 = int_of_float@@ P2.x p0, int_of_float@@ P2.y p0
+    and x1,y1 = int_of_float@@ P2.x p1, int_of_float@@ P2.y p1
+    and x2,y2 = int_of_float@@ P2.x p2, int_of_float@@ P2.y p2
+    and x3,y3 = int_of_float@@ P2.x p3, int_of_float@@ P2.y p3 in
+    let path = ref path in
+    let fabs = Stdlib.Float.abs in
+    let n = ref 0 in
+    let xc :int= x0+x1-x2-x3 in
+    let xa = xc-4*(x1-x2) in
+    let xb = x0-x1-x2+x3 in
+    let xd = xb+4*(x1+x2) in
+    let yc = y0+y1-y2-y3 in
+    let ya = yc-4*(y1-y2) in
+    let yb = y0-y1-y2+y3 in
+    let yd = yb+4*(y1+y2) in
+    let fx0 = ref (float x0)
+    and fx1 = ref 0. and fx2 = ref 0. and fx3 = ref 0.
+    and fy0 = ref (float y0)
+    and fy1 = ref 0. and fy2 = ref 0. and fy3 = ref 0. in
+    let y0 = ref y0 in
+    let t1 = ref @@ float @@ xb*xb-xa*xc
+    and t2 = ref 0. and t = Array.make 5 0. in
+    (* sub-divide curve at gradient sign changes *)
+    if xa = 0 then begin  (* horizontal *)
+      if (abs xc < 2 * abs xb)
+      then begin
+        t.(!n) <- (float xc) /. (2.0*.(float xb));
+        incr n; end;    (* one change *)
+    end else if (!t1 > 0.0) then begin (* two changes *)
+      t2 := sqrt !t1;
+      t1 := ((float xb)-. !t2)/. float xa;
+      if (fabs !t1 < 1.0) then begin t.(!n) <- !t1 ; incr n end;
+      t1 := ((float xb)+. !t2)/. float xa;
+      if (fabs !t1 < 1.0) then begin t.(!n) <- !t1; incr n; end
+    end ;
+
+    t1 := (float (yb*yb)) -. (float @@ ya*yc);
+    if (ya = 0) then begin (* vertical *)
+      if (abs (yc) < 2*abs(yb)) then begin
+        t.(!n) <- float yc /. (2.0*. float yb) ;
+        incr n
+      end; (* one change *)
+    end else if !t1 > 0.0 then begin (* two changes *)
+      t2 := sqrt !t1 ;
+      t1 := (float yb -. !t2)/. float ya;
+      if (fabs !t1 < 1.0) then begin
+        t.(!n) <- !t1; incr n end;
+      t1 := (float yb +. !t2)/. float ya;
+      if (fabs !t1 < 1.0) then begin t.(!n) <- !t1 ; incr n end;
+    end ;
+
+    let rec for_bubble_sort i =
+      (* TODO can we maybe just call Array.sort here? *)
+      if i < !n then begin  (* bubble sort of 4 points *)
+        t1 := t.(i - 1);
+        if (!t1 > t.(i)) then begin
+          t.(i-1) <- t.(i);
+          t.(i) <- !t1;
+          for_bubble_sort 0 (* i = 0 *)
+        end
+        else for_bubble_sort (succ i)
+      end else ()
+    in for_bubble_sort 1 ;
+    let ( * ) = ( *. ) and ( / ) = ( /. )
+    and ( + ) = ( +. ) and ( - ) = ( -. ) in
+    let ( *= ) = fun a b -> a := !a * b in
+
+    t1 := -1.0;
+    t.(!n) <- 1.0; (* begin / end point *)
+    let x0 = ref x0
+    and x3 = ref x3
+    and y3 = ref y3 in
+    for i = 0 to !n (* i <= n*) do (* plot each segment separately *)
+      t2 := t.(i); (* sub-divide at t[i-1], t[i] *)
+      let xc = float xc and xb = float xb in
+      let yc = float yc and yb = float yb in
+      let xa = float xa and xd = float xd in
+      let yd = float yd and ya = float ya in
+      fx1 := ( !t1*( !t1*xb-2.*xc)- !t2*( !t1*( !t1*xa-2.*xb)+xc)+xd)/8.- !fx0;
+      fy1 := ( !t1*( !t1*yb-2.*yc)- !t2*( !t1*( !t1*ya-2.*yb)+yc)+yd)/8.- !fy0;
+      fx2 := ( !t2*( !t2*xb-2.*xc)- !t1*( !t2*( !t2*xa-2.*xb)+xc)+xd)/8.- !fx0;
+      fy2 := ( !t2*( !t2*yb-2.*yc)- !t1*( !t2*( !t2*ya-2.*yb)+yc)+yd)/8.- !fy0;
+      fx3 := ( !t2*( !t2*(3.*xb- !t2*xa)-3.*xc)+xd)/8. ;
+      fx0 := !fx0 - !fx3;
+      fy3 := ( !t2*( !t2*(3.*yb- !t2*ya)-3.*yc)+yd)/8. ;
+      fy0 := !fy0 - !fy3;
+      x3 := int_of_float @@ floor(!fx3+0.5);
+      y3 := int_of_float @@ floor(!fy3+0.5);        (* scale bounds to int *)
+      if (!fx0 <> 0.0) then begin
+        fx0 := (float !x0 - float !x3) / !fx0;
+        fx1 *= !fx0;
+        fx2 *= !fx0; end;
+      if (!fy0 <> 0.0) then begin
+        fy0 := ((float !y0) - float !y3) /. !fy0;
+        fy1 *= !fy0;
+        fy2 *= !fy0; end ;
+      if (!x0 <> !x3 || !y0 <> !y3) then begin (* segment t1 - t2 *)
+        path := plotCubicBezierSeg
+            (P2.v (float !x0) (float !y0))
+            (P2.v ((float !x0)+ !fx1) (float !y0 + !fy1))
+            (P2.v (float !x0 + !fx2) (float !y0 + !fy2))
+            (P2.v (float !x3) (float !y3)) !path fb_t;
+      end;
+      x0 := !x3; y0 := !y3; fx0 := !fx3; fy0 := !fy3; t1 := !t2;
+    done ; (* end for loop *)
+    !path
+
   let _ = quadratic_bezier_step, cubic_bezier_step
 
   let pp_segment ppf = function
-    | `Ccurve (p0, p1, p2) ->
-      Fmt.pf ppf "Ccurve c: %a p1:%a p2:%a"
-        Gg.V2.pp p0 Gg.V2.pp p1 Gg.V2.pp p2
+    | `Ccurve (p1, p2, p3) ->
+      Fmt.pf ppf "Ccurve p1: %a p2:%a p3:%a" V2.pp p1 V2.pp p2 V2.pp p3
     | `Close ->
       Fmt.pf ppf "Close, should draw until Sub"
     (*     [close p] is [p] with a straight line from [p]'s last point to
@@ -623,7 +923,8 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
         (Size2.w radii_size2) (Size2.h radii_size2) Gg.V2.pp p2
     | `Line p2 ->
       Fmt.pf ppf "Line %a" Gg.V2.pp p2
-    | `Qcurve (_Gg_p2, _Gg_p2') -> Fmt.pf ppf "Qcurve"
+    | `Qcurve (p1, p2) ->
+      Fmt.pf ppf "Qcurve p1:%a p2:%a" V2.pp p1 V2.pp p2
     | `Sub p2 ->
       Fmt.pf ppf "Sub %a" Gg.V2.pp p2
   (* [sub pt p] is [p] with a new subpath starting at [pt]. If [p]'s last
@@ -742,6 +1043,12 @@ let x0,y0 = int_of_float @@ P2.x rs.cur, int_of_float @@ P2.y rs.cur in
           let path =
             plotQuadBezier rs.cur p1 p2 rs.path window in
           let rs = {rs with cur = p2 ; path} in
+          rs, `Ok
+        | `Ccurve (p1,p2,p3) ->
+          Logs.debug (fun m -> m "Ccurve from cur:%a p1:%a p2:%a p3:%a"
+                         V2.pp rs.cur V2.pp p1 V2.pp p2 V2.pp p3);
+          let path = plotCubicBezier rs.cur p1 p2 p3 rs.path window in
+          let rs = {rs with cur = p3 ; path } in
           rs, `Ok
         | _ ->
           Logs.err (fun m -> m "r_cut:unmatched: %a" pp_segment seg);

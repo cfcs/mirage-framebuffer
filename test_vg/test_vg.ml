@@ -1,5 +1,8 @@
 open Lwt.Infix
 
+let mouse_callbacks = ref []
+let new_size = ref (0,0)
+
 module Make(FB:Framebuffer.S) = struct
   let pp_events fb () =
     let rec loop () =
@@ -8,7 +11,7 @@ module Make(FB:Framebuffer.S) = struct
       begin match ev with
         | Keypress {pressed ; scancode; mask; keysym; mods} ->
           begin match keysym, mods with
-            | None, _ -> ()
+            | None, _ -> Lwt.return_unit
             | Some ks, kmods ->
               let _ = Framebuffer__Keycodes.pp_keysym,
                       ks, kmods, pressed, scancode, mask in
@@ -23,10 +26,15 @@ module Make(FB:Framebuffer.S) = struct
                     (US_keyboard.to_unicode kmods ks |> List.map Uchar.to_char)
                 )
 *)
-              ()
+              Lwt.return_unit
           end
-        | _ -> ()
-      end ;
+        | Framebuffer.S.Mouse_motion {x;y} ->
+          Lwt_list.iter_s (fun f -> f x y) !mouse_callbacks
+        | Framebuffer.S.Resize (width,height) ->
+          new_size := (width,height);
+          FB.resize ~width ~height fb
+        | _ -> Lwt.return_unit
+      end >>= fun() ->
       loop ()
     in loop ()
 
@@ -44,16 +52,73 @@ module Make(FB:Framebuffer.S) = struct
     let _ = box in let box = P.empty in
     let red_box = I.cut box red in
     let _ = red_box in
-    let circle = P.empty 
+    let mouth = P.empty
+                |> P.sub (P2.v 150. 150.)
+                |> P.qcurve ~rel:true (P2.v 10. 30.) (P2.v 50. 0.)
+                |> P.qcurve ~rel:true (P2.v ~-.10. ~-.30.) (P2.v ~-.50. 0.)
+    in
+    let mouth = I.cut mouth red in
+    let eyes =
+      let cut_white p = I.cut p (I.const Color.white) in
+      let eye_1 = P.empty
+              |> P.sub (P2.v 145. 110.)
+              |> P.ellipse ~rel:true (P2.v 0. 0.) (P2.v 14. 8.) in
+      let eye_2 start =
+        start
+        |> P.sub (P2.v 200. 105.)
+        |> P.ellipse ~rel:true (P2.v 0. 0.) (P2.v 14. 8.) in
+      let _expected =
+        (* should draw two separate circles like below, test-case *)
+        I.blend (cut_white eye_1) (cut_white (eye_2 P.empty)) in
+      cut_white (eye_2 eye_1)
+    in
+    let eye_1_pos = P2.v 145. 110. in
+    let eye_2_pos = P2.v 200. 105. in
+    let eyes ?(mod1=P2.v 0. 0.) ?(mod2=P2.v 0. 0.) () =
+      let cut_black p = I.cut p (I.const Color.black) in
+      let eye_1 p = p |> P.sub eye_1_pos
+                    |> P.circle ~rel:true (mod1) 3. in
+      let eye_2 p = p |> P.sub eye_2_pos
+                    |> P.circle ~rel:true (mod2) 3. in
+      let dots = I.blend (cut_black @@ eye_1 P.empty)
+          (cut_black @@ eye_2 P.empty) in
+      I.blend eyes dots
+    in
+    let () =
+      let f x y =
+        let mouse = P2.v (float x) (float y) in
+        let cmod pos =
+          let d1 = V2.sub mouse pos in
+          let a1 = V2.angle d1 in
+          V2.v (5. *. cos a1) (5. *. sin a1) in
+        let product = I.blend mouth (eyes
+                                       ~mod1:(cmod eye_1_pos)
+                                       ~mod2:(cmod eye_2_pos) () ) in
+        let size = let x,y = FB.dim window in P2.v (float x) (float y) in
+        let r = Vgr.create (VG.target ~window ()) (`Buffer (Buffer.create 32)) in
+        ignore (Vgr.render r (`Image (size, view, product)));
+        ignore (Vgr.render r `End) ;
+        FB.redraw window
+      in
+      mouse_callbacks := f :: !mouse_callbacks ;
+    in
+
+    let circle = P.empty
                  (*|> P.qcurve (P2.v 120. 30.) (P2.v 16. 40.)*)
 
-                 (*|> P.sub (P2.v 150. 150.)
-                 |> P.ellipse ~rel:true
-                   ~angle:(Float.rad_of_deg 10.) (P2.v 0. 0.) (P2.v 40. 20.)*)
+                 |> P.sub (P2.v 150. 150.)
+                 (*|> P.ellipse ~rel:true
+                   ~angle:(Float.rad_of_deg 10.) (P2.v 0. 0.) (P2.v 40. 20.)
+                 *)
 
-                 |> P.sub (P2.v 158. 150.)
+                 |> P.qcurve ~rel:true (P2.v 10. 30.) (P2.v 50. 0.)
+                 |> P.qcurve ~rel:true (P2.v ~-.10. ~-.30.) (P2.v ~-.50. 0.)
+
+                 (*|> P.sub (P2.v 158. 150.)
                  |> P.earc ~large:false ~cw:false ~angle:Stdlib.Float.epsilon
-                   (P2.v 8. 5.) (P2.v 142. 150.) (*
+                   (P2.v 8. 5.) (P2.v 142. 150.)
+                   |> P.close*)
+(*
                  |> P.earc ~large:false ~cw:false ~angle:Stdlib.Float.epsilon
                    (P2.v 8. 5.) (P2.v 158. 150.)*)
                    (*
@@ -143,13 +208,15 @@ module Make(FB:Framebuffer.S) = struct
     |> P.line v9
     in
     let red_v6 = I.cut v6 (I.const Color.red) in
-    let _ = red_v6 in
+    let _ = red_v6, white_circle_with_dots  in
     (*let green_five = I.cut P.empty (I.const Color.green) in*)
     let product = (*I.blend red_box blue_triangle*)
                   (*|> I.blend green_five*)
       (*I.blend red_v6 blue_triangle
       |> I.blend green_five
-      |> I.blend *) white_circle_with_dots
+        |> I.blend *)
+      I.blend (eyes ()) mouth
+      (*white_circle_with_dots*)
                   (*|> I.blend white_circle*)
     in
     ignore (Vgr.render r (`Image (size, view, product)));
