@@ -3,7 +3,43 @@ open Vg
 open Vgr.Private
 (*open Vgr.Private.Data*)
 
+(**
+This module provides a renderer/rasterizer for {!Vg} images
+on top of a {!Framebuffer.S} backend.
+
+*)
+
 module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
+
+  module FB : module type of FB with type t = FB.t
+                                 and type color = FB.color =
+  struct
+    (* One fairly confusing thing to keep in mind is that [0,0] in Vg
+       is in the {!b lower} left corner of the screen,
+       while in [FB] it is in the {!b upper} left corner,
+       meaning [y]-coordinates need to be flipped in order to show correctly.
+       To account for this we currently override the various functions
+       used, but that's not really ideal.
+    *)
+
+    include FB
+
+    let flip_y (t:FB.t) y = pred (snd (dim t) - y)
+
+    let rect t ~x ~y ~x_end ~y_end =
+      rect t ~x ~y:(flip_y t y) ~x_end
+        ~y_end:(flip_y t y_end)
+
+    (* TODO validate this: *)
+    let line_bresenham ?cb t ~x ~y ~x_end ~y_end color =
+      line_bresenham
+        ?cb
+        (*?cb:(match cb with
+            None -> None
+          | Some cb -> Some (fun t ~x ~y color -> cb t ~x ~y:(flip_y t y) color)
+        *) t ~x ~y:y
+        ~x_end ~y_end:y_end color
+  end
 
   let image i = Vgr.Private.I.of_data i
 
@@ -147,6 +183,104 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
       cur = P2.o;
     }
 
+  let quadrants_touched ~large ~clockwise a b =
+    (* calculate which quadrants an angle falls into.
+       note that my quadrant naming is oriented towards a wallclock
+       q1 at 12:05 -> q2 at 14:55 -> q3 17:55 -> q4: 23:55
+       and probably different from where someone familiar with
+       basic geometry would start
+    *)
+    (*let aa = aa -. Float.pi_div_2 in*)
+    (* TODO the angles here start at 15:00 and go counter-clockwise,
+       so 15:05 would be negative and 14:55 would be positive. -pi is 21:00
+       my logic below is a bit broken and assume angle 0. starting at 12:00,
+       so pi/2 is subtracted to make the new 0 angle at 15:00
+    *)
+
+    (* normalize angles from -pi to pi*)
+    let a, b = Gg.Float.wrap_angle a, Gg.Float.wrap_angle b in
+    assert (a <= Float.pi);
+    assert (~-. Float.pi <= a);
+    assert (b <= Float.pi);
+    assert (~-. Float.pi <= b);
+    let q =
+      (* TODO since floating point arithmetic is lossy we can lose decimals
+         here, yielding wrong results. not sure how to fix that, but the
+         multiplication below at least passes my tests...*)
+      ((a*.1000.)-.(b*.1000.)) /. Float.pi_div_2 /. 1000. in
+    Logs.debug (fun m -> m "q: %f %a trunc:%b" q Float.pp q
+               Float.(equal (round q) q));
+    let qs = Array.make 4 large in
+    let qc1 = Stdlib.Float.(rem (4. +. ceil q) 4.) in
+    let qc2 = Stdlib.Float.(rem (4. +. floor q) 4.) in
+    Logs.debug (fun m -> m "XYZ qc1:%f qc2:%f" qc1 qc2);
+    (* if the two angles lie in the same quadrant,
+       we have to draw in all quadrants: *)
+    qs.(int_of_float qc1) <- not large || Stdlib.Float.abs q <= Float.pi_div_2;
+    qs.(int_of_float qc2) <- not large || Stdlib.Float.abs q <= Float.pi_div_2;
+    Logs.debug (fun m -> m "XYZ qt: cw:%b lg:%b a:%f[%a] b:%f[%a] diff:%f q:%f qc1:%f qc2:%f qs:%a"
+                   clockwise
+                   large
+                   a Float.pp a
+                   b Float.pp b (a-.b) q qc1 qc2
+                   Fmt.(array ~sep:(unit",")bool) qs
+               );
+    qs.(0), qs.(1), qs.(2), qs.(3)
+(*
+
+    let a,b,c,d =
+    (* quad 1: *)
+      0. <= aa && aa <= Float.pi_div_2,
+      (* quad 2: *)
+      Float.pi_div_2 < aa , (* && aa <= Float.pi , *)
+      (* quad 3: *)
+      aa <= ~-. Float.pi_div_2,
+      (* quad 4: *)
+      ~-.Float.pi_div_2 < aa && aa <= 0.
+    in
+    assert(
+      let t = List.fold_left
+          (fun acc b -> if b then succ acc else acc)0[a;b;c;d]
+      in if large then 1 < t else 0 < t && t < 2
+      (* ensure at least 1, and 1-2 quadrants touched when [large] is false
+         [large] means it spans more than [pi radians] (180 degrees) *)
+    ) ;
+    (*let xor_cw y = (not cw && y) || (cw && not y) in
+    xor_cw a,
+    xor_cw b,
+    xor_cw c,
+      xor_cw d*)
+    a,b,c,d*)
+
+  let () =
+    (* self-tests for quadrants_touched *)
+    let test t t' =
+      let pt ppf (a,b,c,d) = Fmt.pf ppf "%b,%b,%b,%b" a b c d in
+      Logs.debug (fun m -> m "XYZ self-test %a = %a" pt t pt t');
+      assert(t = t') in
+    let t1, t1' =
+      quadrants_touched ~large:false ~clockwise:false 0. 0.,
+      (true,false,false,false) in
+    let t2, t2' =
+      quadrants_touched ~large:false ~clockwise:false ~-.0.2 0.,
+      (true,false,false,true) in
+    let t3, t3' =
+      quadrants_touched ~large:true ~clockwise:false ~-.0.1 0.1,
+      (true,true,true,true) in
+    let t4, t4' =
+      quadrants_touched ~large:false ~clockwise:false
+        0x1.921FB54442D10p1 ~-.0x1.0000000000000p-48,
+      (false,false,true,true) in
+    let t5, t5' =
+      quadrants_touched ~large:false ~clockwise:false
+        ~-.0x1.0000000000000p-48 0x1.921FB54442D10p1,
+      (true,true,false,false) in
+    test t1 t1' ;
+    test t2 t2' ;
+    test t3 t3' ;
+    test t4 t4' ;
+    test t5 t5'
+
   let quadratic_bezier_step t p0 p1 p2 =
     let powt = Stdlib.Float.pow (1.-.t) 2. in
     let tsquare = t *. t  in
@@ -260,7 +394,8 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     done ;
     Path.union (old_path) (Path.remove_gaps !p)
 
-  let rec plotQuadRationalBezierSeg orig_path p0 p1 p2 (w:float) window : Path.t =
+  let rec plotQuadRationalBezierSeg ~stop
+      orig_path p0 p1 p2 (w:float) window : Path.t =
     let x0, y0 =
       int_of_float @@ P2.x p0,
       int_of_float @@ P2.y p0 in
@@ -270,6 +405,19 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     let x2, y2 =
       int_of_float @@ P2.x p2,
       int_of_float @@ P2.y p2 in
+    let path = ref (Path.add_point ~x:x0 ~y:y0 Path.empty) in
+    let drawing = ref true in
+    let _add_point ~x ~y p =
+      Logs.debug (fun m -> m "zzz x:%d y:%d drawing:%b stop:%a" x y !drawing V2.pp stop);
+      if stop = P2.v (float x) (float y) && stop <> p2 then
+        drawing := not !drawing;
+      if !drawing then begin
+        Path.add_point ~x ~y p ;
+      end else begin
+        Logs.debug (fun m -> m "stopped drawing!");
+        p
+      end
+    in
     let sx = x2 - x1 and sy = y2 - y1 in
     let dx = float @@ x0 - x2
     and dy = float @@ y0 - y2
@@ -299,7 +447,6 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     let err = ref 0. in
     Logs.debug (fun m -> m "if !cur:%f <> 0. && w:%f > 0.0 then begin"
                    !cur w);
-    let path = ref Path.empty in
     if !cur <> 0. && w > 0.0 then begin
       Logs.debug (fun m -> m "if !cur <> 0. && w > 0.0 then begin");
       if ((float !sx) *. (float !sx)
@@ -346,13 +493,16 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
           (let p'x = P2.v !x0 !y0
            and p'd = P2.v !dx !dy
            and p's = P2.v (float !sx) (float !sy) in
-           plotQuadRationalBezierSeg !path p'x p'd p's !cur window) ; (* TODO *)
+           Logs.err (fun m -> m"TODO %s" __LOC__);
+           plotQuadRationalBezierSeg ~stop !path p'x p'd p's !cur window) ; (* TODO *)
         dx := floor @@ (w *. (float !x1) +. !x2) *. !xy +. 0.5 ;
         dy := floor @@ (w *. (float !y1) +. !y2) *. !xy +. 0.5 ;
         let p'd = P2.v !dx !dy in
         let p's = P2.v (float !sx) (float !sy) in
         (* these calls should be made tail-recursive *)
-        path := plotQuadRationalBezierSeg !path p's p'd (P2.v !x2 !y2) !cur window ;
+        Logs.err (fun m -> m "ENTERING recursive thing TODO %s" __LOC__);
+        path := plotQuadRationalBezierSeg ~stop
+            !path p's p'd (P2.v !x2 !y2) !cur window ;
         raise @@ Invalid_argument "return TODO"
       end else begin
         Logs.debug (fun m -> m "entering do .. while");
@@ -360,8 +510,16 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
         let rec do_while () =
           (* line 38: setPixel: *)
           Logs.debug (fun m -> m "setPixel x:%f y:%f" !x0 !y0);
-          path := Path.add_point
-              ~x:(int_of_float !x0) ~y:(int_of_float !y0) !path ;
+          path := _add_point ~x:(int_of_float !x0) ~y:(int_of_float !y0) !path ;
+          (*if P2.x stop <> !x0 && P2.y stop <> !y0 then begin
+            path := Path.add_point
+                ~x:(int_of_float !x0) ~y:(int_of_float !y0) !path
+          end else begin
+            Logs.debug (fun m -> m "=========@.==========@.y==================================== skipping stop point") ;
+            x2 := !x0 ;
+            y2 := !y0 ;
+            raise Not_found
+            end ;*)
           if x0 = x2 && y0 = y2 then raise @@ Invalid_argument "" ;
           x1 := if 2. *. !err > !dy then 1 else 0 ;
           y1 := if 2. *. (!err +. !yy) < ~-. !dy then 1 else 0 ;
@@ -379,52 +537,93 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
           Logs.debug (fun m -> m "dy:%f <= xy:%f && dx:%f >= xy:%f"
                          !dy !xy !dx !xy);
           if !dy <= !xy && !dx >= !xy
-          then do_while () else !path
+          then do_while () else ()
         in
-        path := do_while ()
+        try do_while () with Not_found -> ()
       end
     end ;
     let p0' = P2.v !x0 !y0 in
     let p2' = P2.v !x2 !y2 in
-    Path.remove_gaps (Path.add_line p0' p2' !path window)
+    if p0' <> p2' && p0' <> stop && !drawing then begin
+      Logs.debug (fun m -> m "%s: drawing line because p0'<>p2'" __LOC__);
+      path := Path.add_line p0' p2' !path window
+    end;
+    Path.remove_gaps !path
     |> Path.union orig_path
 
-  let plotRotatedEllipseRect ~stop ~clockwise ~large path x0 y0 x1 y1 zd window : Path.t =
+  let plotRotatedEllipseRect ~begin_angle ~stop_angle ~stop ~clockwise ~large orig_path x0 y0 x1 y1 zd window : Path.t =
     (* freely after program listing 13, Bresenham.pdf *)
-    let path = ref path in
+    let path = ref Path.empty in
     if zd < Stdlib.Float.epsilon && zd > ~-.Stdlib.Float.epsilon then begin
       (* TODO = 0. is probably not good, is this above ok? *)
       Logs.debug (fun m -> m "cool, no rotation for this ellipse");
       plotEllipseRect ~stop ~clockwise ~large !path x0 y0 x1 y1
+      |> Path.remove_gaps |> Path.union orig_path
     end else
       let xd : int = x1 - x0 and yd = y1 - y0 in
       let w : float = float @@ xd * yd in
       let w:float = if w <> 0.0 then (w-.zd)/.(w+.w)
-                    else w in (*squared weight*)
+        else w in (*squared weight*)
+      Logs.debug (fun m -> m "plotRotatedEllipseRect w:%f" w);
       assert (w <= 1.0 && w >= 0.0) ; (* limit angle *)
       let xd = int_of_float @@ floor (float xd *. w +. 0.5)
       and yd = int_of_float @@ floor (float yd *. w +. 0.5) in
       (* ^ snap xe,ye to int *)
-      let p'1'1 = P2.v (float x0) (float (y0 + yd)) in
-      let p'1'2 = P2.v (float x0) (float (y0)) in
-      let p'1'3 = P2.v (float x0 +. float xd) (float (y0)) in
-      let p'x0_y0yd = P2.v (float x0) (float y0 +. float yd) in
-      let p'x1_xd = P2.v (float (x1 - xd)) (float y1) in
-      path := plotQuadRationalBezierSeg !path
-          p'1'1  p'1'2 p'1'3 (1.0-.w) window;
-      path := plotQuadRationalBezierSeg !path
-          p'x0_y0yd (P2.v (float x0) (float y1)) p'x1_xd w window ;
-      path := plotQuadRationalBezierSeg !path
+
+      let flip_unclockwise p1 mid p3 = if true (*clockwise*) (* TODO *)
+        then p1, mid, p3 else p3, mid, p1 in
+      (* point are given in clockwise order: *)
+      let p'4'1, p'4'2, p'4'3 = (* 1:30*)
+        flip_unclockwise (* w, 4*)
+          (P2.v (float x1) (float @@ y1-yd))
+          (P2.v (float x1) (float y0))
+          (P2.v (float (x0+xd)) (float y0)) in
+      let p'2'1, p'2'2, p'2'3 = (* 10:30 *)
+        flip_unclockwise (* w, 2 *)
+          (P2.v (float x0) (float y0 +. float yd))
+          (P2.v (float x0) (float y1))
+         (P2.v (float (x1 - xd)) (float y1)) in
+      let p'3'1, p'3'2, p'3'3 = (* 7:30 *)
+        (* points p0 and p2 rearranged here (in contrast to Listing 13) to
+           make all our drawings go clockwise*)
+        flip_unclockwise (* 1.0 -w, 1 *)
+          (P2.v (float (x0+xd)) (float y0))
+          (P2.v (float x0) (float y0))
+          (P2.v (float x0) (float (y0 + yd)))
+      in
+      let p'1'1, p'1'2, p'1'3 = (* 4:30 *)
+        flip_unclockwise (* 1.0-w, 3*)
           (P2.v (float x1) (float (y1 - yd)))
           (P2.v (float x1) (float y1))
           (P2.v (float @@ x1 - xd) (float y1))
-          (1.0-. w) window ;(*
-      path := plotQuadRationalBezierSeg !path
-          (P2.v (float x1) (float @@ y1-yd))
-          (P2.v (float x1) (float y0))
-          (P2.v (float (x0+xd)) (float y0))
-          w window ;*)
-      !path
+      in
+      let q1,q2,q3,q4 = quadrants_touched ~large ~clockwise begin_angle stop_angle in
+      Logs.debug (fun m -> m "XYZ ellipse arc from [%d+%d,%d+%d] [%d,%d] to %a@.\
+                              XYZ q1:%b q2:%b q3:%b q4:%b@.\
+                             "
+                     x0 xd y0 yd
+                     x1 y1
+                     V2.pp stop
+                     q1 q2 q3 q4
+                 );
+      assert (let xs = V2.x stop |> int_of_float in
+              x0 <= xs && xs <= x1);
+      assert (let ys = V2.y stop |> int_of_float in
+              y0 <= ys && ys <= y1);
+      begin try
+          let plot_quad num p0 p1 p2 w =
+            Logs.debug (fun m -> m "Plotting quadrant %d: %a -> %a -> %a"
+                           num V2.pp p0 V2.pp p1 V2.pp p2);
+            path := plotQuadRationalBezierSeg ~stop !path p0 p1 p2 w window ;
+            Logs.debug (fun m -> m "||||| plotted quadrant %d@." num)
+          in
+          if q1 then plot_quad 1 p'1'1 p'1'2 p'1'3  w;
+          if q2 then plot_quad 2 p'2'1 p'2'2 p'2'3  w;
+          if q3 then plot_quad 3 p'3'1 p'3'2 p'3'3  (1.0 -. w);
+          if q4 then plot_quad 4 p'4'1 p'4'2 p'4'3  (1.0-.w);
+        with Not_found -> Logs.debug (fun m -> m "early exit")
+      end ;
+      Path.remove_gaps !path |> Path.union orig_path
 
   let plotQuadBezierSeg p0 p1 p2 path fb_t =
     let path = ref path in
@@ -594,7 +793,7 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
        is that something we need to handle here? *)
     Path.union orig_path (Path.remove_gaps !path)
 
-  let plotRotatedEllipse ~stop ~clockwise ~large path xy
+  let plotRotatedEllipse ~begin_angle ~stop_angle ~stop ~clockwise ~large path xy
       radii angle fb_t : Path.t =
     (* Listing 13: Bresenham.pdf: plot ellipse rotated by angle (radian) *)
     (* xy: center *)
@@ -613,7 +812,7 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     let zd = (zd *. a *. b) /. (xd *. yd) in (* scale to integer*)
     Logs.debug (fun m -> m "xd:%f yd:%f a:%f zd:%f" xd yd a zd);
     let i = int_of_float in
-    plotRotatedEllipseRect ~stop ~clockwise ~large path
+    plotRotatedEllipseRect ~begin_angle ~stop_angle ~stop ~clockwise ~large path
       (i@@ x-.a) (i@@ y-.b)
       (i@@ x+.a) (i@@ y+.b)
       (4. *. zd *. cos angle) fb_t
@@ -952,13 +1151,13 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
           Logs.warn (fun m -> m "GOTO sub %a" Gg.V2.pp sub);
           {rs with sub; cur = sub}, `Ok
         | `Close ->
-          Logs.warn (fun m -> m "CLOSING");
+          Logs.warn (fun m -> m "CLOSING TODO LINE COMMENTED OUT");
           (* drawing a line from cur to sub: *)
           (* TODO if we rs.sub*)
           let rs = {rs with
                     cur = rs.sub;
                     path =
-                      if rs.cur = rs.sub
+                      if rs.cur = rs.sub || false (* TODO remove this false*)
                       then rs.path (* already there *)
                       else Path.add_line rs.cur rs.sub rs.path window} in
           Logs.debug (fun m -> m "%a" Path.pp rs.path);
@@ -969,12 +1168,20 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
                         ~large ~cw:clockwise angle radii p2 with
             | None ->
               Vg.Vgr.Private.warn r (`Other "invalid earc!!! TODO") ;
-              Logs.warn (fun m -> m "INVALID EARC TODO") ;
+              Logs.warn (fun m -> m "INVALID EARC TODO COLLAPSE TO LINE") ;
               rs, `Partial
             | Some (center, m2, a, a') ->
-              Logs.warn (fun m -> m "earc helper: c=%a m=%a a:%f a':%f"
-                            V2.pp center M2.pp m2 a a') ;
-              Logs.warn (fun m -> m"EARC GOT: %a" pp_segment seg);
+              let a1'q1, a1'q2, a1'q3, a1'q4 = quadrants_touched ~large ~clockwise a a' in
+              Logs.warn (fun m ->
+                  m "earc helper: cur:%a stop:%a c=%a XYZ m=%a XYZ a:%f a':%f XYZ \
+                     @  seg: %a@ \
+                     XYZ @.a1'q1: %b a1'q2: %b a1'q3: %b a1'q4: %b"
+                    V2.pp rs.cur V2.pp p2
+                    V2.pp center M2.pp m2 a a'
+                    pp_segment seg
+                    a1'q1 a1'q2 a1'q3 a1'q4
+                ) ;
+              
               (*let x1, y1 =
                 int_of_float@@ P2.x p2,
                 int_of_float@@ P2.y p2 in
@@ -1029,7 +1236,7 @@ let x0,y0 = int_of_float @@ P2.x rs.cur, int_of_float @@ P2.y rs.cur in
           let x1,y1 = int_of_float @@ P2.x _radii, int_of_float @@ P2.y _radii in
 *)
               let path =
-                plotRotatedEllipse ~stop:p2 ~clockwise ~large
+                plotRotatedEllipse ~begin_angle:a ~stop_angle:a' ~stop:p2 ~clockwise ~large
                   rs.path center radii angle window
               in
               let rs = {rs with cur = p2 ; path} in

@@ -1,5 +1,5 @@
 (executables
- (names vgeyes)
+ (names vgeyes test_vg)
  (libraries mirage-framebuffer-tsdl mirage-framebuffer
    mirage-framebuffer-vg logs.fmt)
 )
@@ -7,6 +7,8 @@
 (alias
  (name runtest)
  (deps
-  (:< vgeyes.exe))
+   (:< test_vg.exe)
+   (:<< vgeyes.exe)
+  )
  (action
   (run %{<})))
