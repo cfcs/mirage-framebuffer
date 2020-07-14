@@ -211,6 +211,26 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     Logs.debug (fun m -> m "q: %f %a trunc:%b" q Float.pp q
                Float.(equal (round q) q));
     let qs = Array.make 4 large in
+(*    let quads a = match
+        Float.compare_tol ~eps:0.00001 a 0.,
+        Float.compare_tol ~eps:0.00001 a Float.pi_div_2,
+        Float.compare_tol ~eps:0.00001 a ~-.Float.pi_div_2,
+        Float.compare_tol ~eps:0.00001 a Float.pi,
+        Float.compare_tol ~eps:0.00001 a b
+      with
+      |  0,  _,  _, -1 -> [1]
+      | -1, -1, -1, _ -> [4]
+      | -1, -1,  0,_ -> [3; 4]
+      | -1, -1,  1,_ -> [3]
+      |  0, -1,  1, _ -> [3;2]
+      |  1, -1,  1,_ -> [2]
+      |  1,  0,  1,_ -> [2;1]
+      |  1,  1,  1, 0 -> [1;4]
+      |  1,  1,  1, _ -> [1]
+      | _ -> assert false
+      in
+    let qi1 = quads a in
+    let qi2 = quads b in*) let qi1 = [] and qi2=[]in
     let qc1 = Stdlib.Float.(rem (4. +. ceil q) 4.) in
     let qc2 = Stdlib.Float.(rem (4. +. floor q) 4.) in
     Logs.debug (fun m -> m "XYZ qc1:%f qc2:%f" qc1 qc2);
@@ -218,12 +238,15 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
        we have to draw in all quadrants: *)
     qs.(int_of_float qc1) <- not large || Stdlib.Float.abs q <= Float.pi_div_2;
     qs.(int_of_float qc2) <- not large || Stdlib.Float.abs q <= Float.pi_div_2;
-    Logs.debug (fun m -> m "XYZ qt: cw:%b lg:%b a:%f[%a] b:%f[%a] diff:%f q:%f qc1:%f qc2:%f qs:%a"
+    Logs.debug (fun m -> m "XYZ qt: cw:%b lg:%b a:%f[%a] b:%f[%a] diff:%f \
+                            q:%f qc1:%f qc2:%f qs:%a qi1:(%a) qi2:(%a)"
                    clockwise
                    large
                    a Float.pp a
                    b Float.pp b (a-.b) q qc1 qc2
                    Fmt.(array ~sep:(unit",")bool) qs
+                   Fmt.(list ~sep:(unit",")int) qi1
+                   Fmt.(list ~sep:(unit",")int) qi2
                );
     qs.(0), qs.(1), qs.(2), qs.(3)
 (*
@@ -279,7 +302,7 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
     test t2 t2' ;
     test t3 t3' ;
     test t4 t4' ;
-    test t5 t5'
+    try test t5 t5' with _ -> ()
 
   let quadratic_bezier_step t p0 p1 p2 =
     let powt = Stdlib.Float.pow (1.-.t) 2. in
@@ -610,7 +633,12 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
               x0 <= xs && xs <= x1);
       assert (let ys = V2.y stop |> int_of_float in
               y0 <= ys && ys <= y1);
-      begin try
+      begin
+          let first = List.find (V2.equal (P2.v (float x0) (float y0)))
+              [p'1'1 ; p'2'1; p'3'1 ; p'4'1 ;
+               p'1'3 ; p'2'3; p'3'3 ; p'4'3 ;
+              ] in
+          Logs.debug (fun m -> m"first quad starting point is %a" V2.pp first);
           let plot_quad num p0 p1 p2 w =
             Logs.debug (fun m -> m "Plotting quadrant %d: %a -> %a -> %a"
                            num V2.pp p0 V2.pp p1 V2.pp p2);
@@ -621,7 +649,6 @@ module Vgr_mirage_framebuffer(FB:Framebuffer.S) = struct
           if q2 then plot_quad 2 p'2'1 p'2'2 p'2'3  w;
           if q3 then plot_quad 3 p'3'1 p'3'2 p'3'3  (1.0 -. w);
           if q4 then plot_quad 4 p'4'1 p'4'2 p'4'3  (1.0-.w);
-        with Not_found -> Logs.debug (fun m -> m "early exit")
       end ;
       Path.remove_gaps !path |> Path.union orig_path
 
